@@ -2318,23 +2318,32 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     this.#backgroundReplays.set(thread.id, updates);
     // The agent goes on with its replay after a timeout, so the session's updates stay apart, and a
     // prompt waits, until the load answers. The prompt's own `turn/start` time limit still applies.
+    // A load that answers in time releases them only after its entries are applied: a waiting prompt
+    // must not start its turn before the replay starts the agent's.
     const release = () => {
       if (this.#backgroundReplays.get(thread.id) === updates) this.#backgroundReplays.delete(thread.id);
       if (thread.backgroundReplay === done) thread.backgroundReplay = null;
       Deferred.doneUnsafe(done, Exit.void);
     };
-    let load: Promise<unknown> | null = null;
+    let started = false;
+    let settled = false;
+    let givenUp = false;
+    const settle = () => {
+      settled = true;
+      if (givenUp) release();
+    };
     yield* Effect.gen({ self: this }, function* () {
       const connection = yield* providerSync(() => this.#requireConnection());
-      const started = Promise.resolve().then(() => connection.loadSession({ sessionId: thread.id, ...thread.restore }));
-      load = started;
-      started.then(release, release);
-      yield* providerCall(() => started).pipe(this.#backgroundTimeout("session/load"));
+      const load = Promise.resolve().then(() => connection.loadSession({ sessionId: thread.id, ...thread.restore }));
+      started = true;
+      load.then(settle, settle);
+      yield* providerCall(() => load).pipe(this.#backgroundTimeout("session/load"));
       this.#applyBackgroundEntries(thread, updates);
     }).pipe(
       Effect.ensuring(
         Effect.sync(() => {
-          if (!load) release();
+          if (!started || settled) release();
+          else givenUp = true;
         }),
       ),
     );
