@@ -133,6 +133,7 @@ export function SkillsMarketplace() {
   const { openInstalledMarketplaceAgent } = useServerSelection();
   const { openMcpAdd } = useServerSettings();
   const connectors = useConnectors();
+  const platform = usePlatform();
   const { remoteDesktopWorkspaceVisible, hideRemoteDesktopWorkspace } = useRemoteDesktop();
   // The remote desktop covers the window card, so a link or a search that opens the page hides it.
   // The remote desktop session stays.
@@ -157,6 +158,7 @@ export function SkillsMarketplace() {
         setPendingPluginConnect(false);
       }}
       connectors={connectors.active}
+      macOS={platform.appInfo()?.platform === "darwin"}
       onAddServer={(serverId) => {
         setSkillsMarketplaceOpen(false);
         openMcpAdd(serverId, null);

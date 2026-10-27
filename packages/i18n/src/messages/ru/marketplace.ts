@@ -142,6 +142,21 @@ export const messages = {
   "marketplace.app.setup.desktopConnected": "Подключено к {address}.",
   "marketplace.app.setup.open": "Вход и ключ не нужны.",
   "marketplace.app.connectAgain": "Подключить снова",
+  "marketplace.app.automation.askOnInstall": "Запросить доступ у macOS при установке",
+  "marketplace.app.automation.title": "Доступ к приложениям Apple",
+  "marketplace.app.automation.description":
+    "macOS показывает один запрос для каждого приложения. Закрытое приложение ненадолго откроется, а затем закроется.",
+  "marketplace.app.automation.request": "Запросить доступ",
+  "marketplace.app.automation.allowed": "Теперь OpenBot может управлять всеми приложениями Apple.",
+  "marketplace.app.automation.refused":
+    "macOS не дала доступ к приложениям: {apps}. Разрешите OpenBot в Системных настройках › Конфиденциальность и безопасность › Автоматизация.",
+  "marketplace.app.automation.app.calendar": "Календарь",
+  "marketplace.app.automation.app.contacts": "Контакты",
+  "marketplace.app.automation.app.mail": "Почта",
+  "marketplace.app.automation.app.notes": "Заметки",
+  "marketplace.app.automation.app.reminders": "Напоминания",
+  "marketplace.app.automation.app.messages": "Сообщения",
+  "marketplace.app.automation.app.safari": "Safari",
   "marketplace.app.signInTitle": "Снова войдите в {name}",
   "marketplace.app.signInDescription":
     "«{name}» отклонил сохранённый вход. Агенты не смогут им пользоваться, пока вы снова не войдёте.",
@@ -216,7 +231,7 @@ export const messages = {
     "Перечислите токены дизайна в открытом файле Paper и сравните их с нашей темой.",
   "marketplace.plugin.appleApps.tagline": "Почта, Календарь и другое на вашем Mac",
   "marketplace.plugin.appleApps.description":
-    "Apple apps позволяет агентам работать с приложениями Почта, Календарь, Контакты, Напоминания, Заметки, Сообщения и Safari на этом Mac. Работает только в macOS. OpenBot запускает mcp-icloud — сервер сообщества, который не создан Apple или OpenBot. Сервер управляет приложениями через AppleScript на этом компьютере, и ему не нужны аккаунт или ключ. Когда агент впервые использует приложение, macOS спрашивает, может ли OpenBot им управлять. Чтобы изменить это позже, откройте Системные настройки › Конфиденциальность и безопасность › Автоматизация. Агенты могут отправлять письма и iMessage, а также изменять или удалять события, контакты и напоминания, поэтому проверяйте каждую запись перед подтверждением. То, что читают инструменты, например текст писем, передаётся провайдеру модели агента.",
+    "Apple apps позволяет агентам работать с приложениями Почта, Календарь, Контакты, Напоминания, Заметки, Сообщения и Safari на этом Mac. Работает только в macOS. OpenBot запускает mcp-icloud — сервер сообщества, который не создан Apple или OpenBot. Сервер управляет приложениями через AppleScript на этом компьютере, и ему не нужны аккаунт или ключ. При установке OpenBot может сразу запросить у macOS доступ ко всем этим приложениям, по одному запросу на приложение. Иначе macOS спросит, когда агент впервые использует приложение. Чтобы изменить это позже, откройте Системные настройки › Конфиденциальность и безопасность › Автоматизация. Агенты могут отправлять письма и iMessage, а также изменять или удалять события, контакты и напоминания, поэтому проверяйте каждую запись перед подтверждением. То, что читают инструменты, например текст писем, передаётся провайдеру модели агента.",
   "marketplace.plugin.appleApps.app":
     "Почта, Календарь, Контакты, Напоминания, Заметки, Сообщения и Safari через локальный сервер mcp-icloud. Нужны macOS и доступ в разделе «Автоматизация».",
   "marketplace.plugin.appleApps.prompt.unread": "Кратко перескажите мои непрочитанные письма за сегодня в Apple Почте.",

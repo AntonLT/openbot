@@ -33,6 +33,7 @@ export interface SkillsPort {
     | "uninstallAgentSkill"
   >;
   marketplaceAgents: Pick<OpenBotDesktopApi["marketplaceAgents"], "get" | "install" | "list">;
+  macAutomation: Pick<OpenBotDesktopApi["macAutomation"], "request">;
   skills: Pick<
     OpenBotDesktopApi["skills"],
     | "get"

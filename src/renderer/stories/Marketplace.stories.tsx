@@ -19,6 +19,7 @@ import { currentText } from "@openbot/ui/text";
 import { createSignal, createStore, onSettled, Show, untrack } from "solid-js";
 import { fn } from "storybook/test";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { MARKETPLACE_PLUGINS } from "../src/features/settings/marketplace-plugin-catalog";
 import {
   STORY_AGENT_SUMMARIES,
   STORY_MARKETPLACE_AGENT_DETAILS,
@@ -73,7 +74,12 @@ interface StoryProps {
   held?: Readonly<Record<string, HeldState>>;
   /** Every connector app is set up, so its page shows its rows and its Danger zone. */
   connected?: boolean;
+  /** The window runs on a Mac, so the Apple apps listing can ask macOS for access. */
+  macOS?: boolean;
 }
+
+/** The Apple apps listing, which only a Mac asks macOS about. */
+const APPLE_APPS = MARKETPLACE_PLUGINS.filter((plugin) => plugin.slug === "apple-apps");
 
 const FIRST_HELD: Readonly<Record<string, HeldState>> = { [STORY_MARKETPLACE_PLUGINS[0]?.slug ?? ""]: "connected" };
 
@@ -84,7 +90,7 @@ function pluginStatus(held: HeldState | undefined): MarketplaceApp["status"] {
 
 /** The real window on fixtures. Each action changes the fixture state, so the states can be tried. */
 function MarketplaceStory(props: StoryProps) {
-  const { member, empty, start, held = FIRST_HELD, connected } = untrack(() => ({ ...props }));
+  const { member, empty, start, held = FIRST_HELD, connected, macOS } = untrack(() => ({ ...props }));
   const details = connected ? CONNECTED_CONNECTOR_DETAILS : STORY_CONNECTOR_DETAILS;
   const agents = empty ? [] : STORY_MARKETPLACE_AGENTS;
   const skills = empty ? [] : STORY_MARKETPLACE_SKILLS;
@@ -116,7 +122,7 @@ function MarketplaceStory(props: StoryProps) {
     installed: { chief: firstSkill ? [installed(firstSkill)] : [] },
     apps: [
       ...connectorApps,
-      ...STORY_MARKETPLACE_PLUGINS.map((plugin): MarketplaceApp => {
+      ...[...STORY_MARKETPLACE_PLUGINS, ...(macOS ? APPLE_APPS : [])].map((plugin): MarketplaceApp => {
         const state = held[plugin.slug];
         return {
           kind: "plugin",
@@ -147,6 +153,7 @@ function MarketplaceStory(props: StoryProps) {
   });
   const [error, setError] = createSignal<string | null>(null);
   const [open, setOpen] = createSignal(true);
+  const [askOnInstall, setAskOnInstall] = createSignal(true);
   /** The connect dialog on screen, as the Marketplace window opens it for an app's way in. */
   const [pending, setPending] = createSignal<{
     subject: McpConnectSubject;
@@ -267,6 +274,18 @@ function MarketplaceStory(props: StoryProps) {
     copyLink: fn(),
     openUrl: fn(),
     connector: (id) => connectors[id],
+    // The preview has no Apple apps, so every app answers as allowed.
+    macAutomation: macOS
+      ? {
+          askOnInstall,
+          setAskOnInstall,
+          request: async () => {
+            setState((draft) => {
+              draft.notice = currentText().t("marketplace.app.automation.allowed");
+            });
+          },
+        }
+      : undefined,
 
     error,
     clearError: () => setError(null),
@@ -345,6 +364,15 @@ export const PluginSignInNeeded = at(plugin("notion"), { held: { notion: "signIn
 
 /** A desktop app: the server runs in an app on this computer, at a local address. */
 export const PluginDesktop = at(plugin("figma"), { held: { figma: "connected" } });
+
+/** Before the install on a Mac: the switch says whether the install asks macOS for each Apple app. */
+export const PluginAppleApps = at(plugin("apple-apps"), { macOS: true });
+
+/** After the install on a Mac: the button asks macOS again. */
+export const PluginAppleAppsConnected = at(plugin("apple-apps"), {
+  macOS: true,
+  held: { "apple-apps": "connected" },
+});
 
 export const OnePassword = at((nav) => {
   nav.go({ kind: "app", id: "onepassword" });

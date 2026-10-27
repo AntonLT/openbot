@@ -86,9 +86,9 @@ export const PLUGIN_CATALOG_INDEX: PluginCatalogIndex = {
     },
     {
       slug: "apple-apps",
-      version: "1.0.0",
+      version: "1.1.0",
       featured: false,
-      detailSha256: "2fa7aa1147b2b392efd666efa5052f7cacb225868e936a5318ab26b451a57e25",
+      detailSha256: "ee3aa4ba4d11b38bea38f703959868cfb6bb5cf4ac5d3ef7a998e4a40a345984",
     },
     {
       slug: "sentry",
@@ -212,6 +212,7 @@ export interface PluginCatalogApp {
   description: string;
   iconUrl: string | null;
   server: PluginCatalogServer;
+  macAutomation?: string[];
 }
 
 export type PluginCatalogServer =
@@ -648,11 +649,11 @@ export const PLUGIN_CATALOG_DETAILS: Record<string, PluginCatalogDetail> = {
     name: "Apple apps",
     tagline: "Mail, Calendar and more on your Mac",
     description:
-      "Apple apps lets agents use Mail, Calendar, Contacts, Reminders, Notes, Messages and Safari on this Mac. It works on macOS only. OpenBot starts mcp-icloud, a community server that is not made by Apple or OpenBot. The server controls the apps through AppleScript, on this computer, and needs no account and no key. The first time an agent uses an app, macOS asks if OpenBot can control it. To change this later, open System Settings › Privacy & Security › Automation. Agents can send email and iMessages, and change or delete events, contacts and reminders, so review each write before you approve it. What the tools read, such as email text, goes to the model provider of the agent.",
+      "Apple apps lets agents use Mail, Calendar, Contacts, Reminders, Notes, Messages and Safari on this Mac. It works on macOS only. OpenBot starts mcp-icloud, a community server that is not made by Apple or OpenBot. The server controls the apps through AppleScript, on this computer, and needs no account and no key. When you install it, OpenBot can ask macOS for access to all of these apps at once, with one prompt for each app. If you do not, macOS asks the first time an agent uses an app. To change this later, open System Settings › Privacy & Security › Automation. Agents can send email and iMessages, and change or delete events, contacts and reminders, so review each write before you approve it. What the tools read, such as email text, goes to the model provider of the agent.",
     category: "productivity",
     creatorName: "MrGo2",
     iconUrl: "https://www.apple.com/favicon.ico",
-    version: "1.0.0",
+    version: "1.1.0",
     prompts: [
       { id: "prompt-unread", text: "Summarize my unread email in Apple Mail from today." },
       { id: "prompt-today", text: "What is on my Apple Calendar today and tomorrow?" },
@@ -669,6 +670,7 @@ export const PLUGIN_CATALOG_DETAILS: Record<string, PluginCatalogDetail> = {
           "Mail, Calendar, Contacts, Reminders, Notes, Messages and Safari, over the local mcp-icloud server. Needs macOS and Automation access.",
         iconUrl: "https://www.apple.com/favicon.ico",
         server: { name: "apple-apps", transport: "stdio", command: "npx", args: ["-y", "mcp-icloud@2.1.3"] },
+        macAutomation: ["calendar", "contacts", "mail", "notes", "reminders", "messages", "safari"],
       },
     ],
     websiteUrl: "https://github.com/MrGo2/icloud-mcp",

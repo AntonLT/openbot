@@ -19,6 +19,7 @@ import type {
   IdleRestartTarget,
   InstallMarketplaceAgentInput,
   InstallSkillInput,
+  MacAutomationTarget,
   MacPermissionId,
   MarketplaceAgentQuery,
   MarketplaceSkillQuery,
@@ -62,6 +63,7 @@ import {
   isDynamicIslandPresentation,
   isRemoteNetworkRoute,
   isSkillCategory,
+  MAC_AUTOMATION_TARGETS,
 } from "@openbot/contracts/ipc";
 import {
   type DynamicRecord,
@@ -256,6 +258,14 @@ export function parseMacPermission(input: unknown): MacPermissionId {
     throw new Error("Unknown macOS permission.");
   }
   return input;
+}
+
+/** Each app once, in the order asked: macOS shows one prompt at a time. */
+export function parseMacAutomationTargets(input: unknown): readonly MacAutomationTarget[] {
+  if (!Array.isArray(input) || !input.every((target) => isOneOf(MAC_AUTOMATION_TARGETS, target))) {
+    throw new Error("Unknown Apple app.");
+  }
+  return [...new Set(input)];
 }
 
 export function parseExternalDestination(input: unknown): ExternalDestination {

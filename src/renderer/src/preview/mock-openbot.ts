@@ -1081,6 +1081,10 @@ export function createMockOpenBot(options: MockOpenBotOptions = {}): MockOpenBot
       onAction: () => () => undefined,
       setInteractive: async () => undefined,
     },
+    // The preview has no Apple apps to ask, so every app answers as allowed.
+    macAutomation: {
+      request: async (targets) => targets.map((target) => ({ target, status: "granted" })),
+    },
     computerUse: {
       getState: async () => computerUseState(),
       // The preview grants the permission the pane was opened for, because the panel's whole job is

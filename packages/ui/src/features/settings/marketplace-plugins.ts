@@ -9,7 +9,7 @@
  * same categories the rest of the marketplace already offers.
  */
 
-import type { McpServerConfig, McpTransport, SkillCategory } from "@openbot/contracts/ipc";
+import type { MacAutomationTarget, McpServerConfig, McpTransport, SkillCategory } from "@openbot/contracts/ipc";
 import { isListingUrl, type McpAuth, mcpFlowFields } from "@openbot/contracts/mcp-connect-flows";
 
 /** One of the example questions a plugin listing opens with. */
@@ -84,6 +84,8 @@ export interface MarketplacePluginApp {
   description: string;
   iconUrl: string | null;
   server: MarketplacePluginServer;
+  /** The Apple apps the server drives through AppleScript. OpenBot can ask macOS for them at install. */
+  macAutomation?: readonly MacAutomationTarget[];
 }
 
 /**

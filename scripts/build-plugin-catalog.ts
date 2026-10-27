@@ -4,12 +4,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   isSkillCategory,
+  MAC_AUTOMATION_TARGETS,
+  type MacAutomationTarget,
   type McpServerConfig,
   mcpConfigErrors,
   normalizeMcpConfig,
   type SkillCategory,
 } from "@openbot/contracts/ipc";
-import { type DynamicRecord, isDynamicRecord, isString } from "@openbot/contracts/runtime-values";
+import { type DynamicRecord, isDynamicRecord, isOneOf, isString } from "@openbot/contracts/runtime-values";
 import { createOpenBotLogger, toLogValue } from "@openbot/logging";
 
 const logger = createOpenBotLogger("build-plugin-catalog");
@@ -119,6 +121,8 @@ export interface PluginApp {
   description: string;
   iconUrl: string | null;
   server: PluginServer;
+  /** The Apple apps the server drives through AppleScript, which macOS asks about one by one. */
+  macAutomation?: MacAutomationTarget[];
 }
 
 export interface PluginDetail {
@@ -295,7 +299,24 @@ function parseApp(slug: string, value: unknown): PluginApp {
   const firstError = errors.name ?? errors.command ?? errors.url;
   if (firstError) throw new Error(`Plugin ${slug} server is invalid: ${firstError}`);
   checkCredentialFlows(slug, server, base);
-  return { id: text("id"), name: text("name"), description: text("description"), iconUrl, server };
+  const app: PluginApp = { id: text("id"), name: text("name"), description: text("description"), iconUrl, server };
+  const macAutomation = parseMacAutomation(slug, value.macAutomation, server);
+  return macAutomation ? { ...app, macAutomation } : app;
+}
+
+/** Only a server that runs on this computer can drive its apps, so only stdio may ask. */
+function parseMacAutomation(slug: string, value: unknown, server: PluginServer): MacAutomationTarget[] | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    !value.every((target) => isOneOf(MAC_AUTOMATION_TARGETS, target)) ||
+    new Set(value).size !== value.length
+  ) {
+    throw new Error(`Plugin ${slug} macAutomation must list known Apple apps, each once.`);
+  }
+  if (server.transport !== "stdio") throw new Error(`Plugin ${slug} macAutomation needs a stdio server.`);
+  return value;
 }
 
 function parseServer(slug: string, value: unknown): PluginServer {
@@ -651,11 +672,15 @@ export const MARKETPLACE_PLUGINS: MarketplacePluginDetail[] = [
  * The phone's copy. Mobile cannot import the renderer's types from `@openbot/ui`, so the module states
  * its own. The vendor icon addresses are left out: the phone loads each icon from the account
  * service's `/plugins/icon/<slug>?app=<id>`, so opening the Marketplace sends no request to a vendor.
+ * The Apple apps a server drives are left out too: only the Mac that runs the server can ask for them.
  */
 function renderMobileModule(plugins: PluginDetail[]): string {
   const listings = plugins.map((plugin) => {
     const { iconUrl: _iconUrl, updatedAt: _updatedAt, apps, ...detail } = plugin;
-    return { ...detail, apps: apps.map(({ iconUrl: _appIconUrl, ...app }) => app) };
+    return {
+      ...detail,
+      apps: apps.map(({ iconUrl: _appIconUrl, macAutomation: _macAutomation, ...app }) => app),
+    };
   });
   return `/**
  * The plugins the mobile Marketplace offers.
@@ -778,6 +803,7 @@ export interface PluginCatalogApp {
   description: string;
   iconUrl: string | null;
   server: PluginCatalogServer;
+  macAutomation?: string[];
 }
 
 export type PluginCatalogServer =

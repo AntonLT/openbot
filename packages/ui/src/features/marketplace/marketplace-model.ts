@@ -112,6 +112,15 @@ export interface MarketplaceConnector {
   readonly connect?: (() => void) | undefined;
 }
 
+/** Asks macOS on this computer for Automation access to the Apple apps that a plugin drives. */
+export interface MarketplaceMacAutomation {
+  /** Whether an install asks right after the app is saved. */
+  askOnInstall: () => boolean;
+  setAskOnInstall: (ask: boolean) => void;
+  /** macOS shows one prompt for each app it has no answer for. The result is a notice or an error. */
+  request: (app: Extract<MarketplaceApp, { kind: "plugin" }>) => Promise<void>;
+}
+
 /**
  * What the Marketplace view reads and asks for. The renderer builds it from its IPC calls, and a
  * story builds it from fixtures. Each action reports its own failure through `error`.
@@ -158,6 +167,8 @@ export interface MarketplaceModel {
   reconnectApp: (app: Extract<MarketplaceApp, { kind: "plugin" }>, appId: string) => Promise<boolean>;
   /** The joined server that keeps an app's credential. Absent when this computer keeps it. */
   appHostName?: string | undefined;
+  /** Absent when this client cannot ask macOS, or when a joined server runs the apps. */
+  macAutomation?: MarketplaceMacAutomation | undefined;
   /** Asks for a confirmation, then removes what the catalog app installed. */
   disconnectApp: (app: Extract<MarketplaceApp, { kind: "plugin" }>) => void;
   /** Removes a custom MCP server. */

@@ -238,6 +238,33 @@ export interface VerifyEmailCodeInput {
 export type MacPermissionId = "screen-recording" | "accessibility";
 
 /**
+ * The Apple apps an MCP server may drive through AppleScript. macOS asks once for each, under
+ * Privacy & Security › Automation, and keeps the answer for OpenBot.
+ */
+export const MAC_AUTOMATION_TARGETS = [
+  "calendar",
+  "contacts",
+  "mail",
+  "notes",
+  "reminders",
+  "messages",
+  "safari",
+] as const;
+
+export type MacAutomationTarget = (typeof MAC_AUTOMATION_TARGETS)[number];
+
+export const MAC_AUTOMATION_STATUSES = ["granted", "denied", "failed"] as const;
+
+/**
+ * The answer for one app. `denied` is the user's refusal, now or earlier: macOS does not ask again,
+ * and only System Settings can change it. `failed` is anything else, such as an app that is not there.
+ */
+export interface MacAutomationResult {
+  target: MacAutomationTarget;
+  status: (typeof MAC_AUTOMATION_STATUSES)[number];
+}
+
+/**
  * How far Computer Use is from working, as one value the panel switches on.
  *
  * `permissions-required` is the only one the user can act on, by opening System Settings.

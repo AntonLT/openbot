@@ -114,6 +114,21 @@ export const messages = {
   "marketplace.app.setup.desktopConnected": "{address}에 연결됐어요.",
   "marketplace.app.setup.open": "로그인이나 키가 필요 없어요.",
   "marketplace.app.connectAgain": "다시 연결",
+  "marketplace.app.automation.askOnInstall": "설치할 때 macOS에 접근 요청",
+  "marketplace.app.automation.title": "Apple 앱 접근",
+  "marketplace.app.automation.description":
+    "macOS가 앱마다 확인 창을 하나씩 보여 줘요. 닫혀 있는 앱은 잠깐 열렸다가 종료돼요.",
+  "marketplace.app.automation.request": "접근 요청",
+  "marketplace.app.automation.allowed": "이제 OpenBot이 모든 Apple 앱을 제어할 수 있어요.",
+  "marketplace.app.automation.refused":
+    "macOS가 {apps}에 대한 접근을 허용하지 않았어요. 시스템 설정 › 개인정보 보호 및 보안 › 자동화에서 OpenBot을 허용하세요.",
+  "marketplace.app.automation.app.calendar": "캘린더",
+  "marketplace.app.automation.app.contacts": "연락처",
+  "marketplace.app.automation.app.mail": "Mail",
+  "marketplace.app.automation.app.notes": "메모",
+  "marketplace.app.automation.app.reminders": "미리 알림",
+  "marketplace.app.automation.app.messages": "메시지",
+  "marketplace.app.automation.app.safari": "Safari",
   "marketplace.app.signInTitle": "{name}에 다시 로그인하세요",
   "marketplace.app.signInDescription":
     "{name}이(가) 저장된 로그인을 거부했어요. 다시 로그인할 때까지 에이전트가 이 앱을 사용할 수 없어요.",
@@ -178,7 +193,7 @@ export const messages = {
   "marketplace.plugin.paper.prompt.tokens": "열려 있는 Paper 파일의 디자인 토큰을 나열하고 우리 테마와 비교해 줘.",
   "marketplace.plugin.appleApps.tagline": "Mac의 Mail, 캘린더 등",
   "marketplace.plugin.appleApps.description":
-    "Apple apps를 사용하면 에이전트가 이 Mac의 Mail, 캘린더, 연락처, 미리 알림, 메모, 메시지, Safari를 사용할 수 있어요. macOS에서만 작동해요. OpenBot은 mcp-icloud를 시작해요. Apple이나 OpenBot이 만들지 않은 커뮤니티 서버예요. 서버는 이 컴퓨터에서 AppleScript로 앱을 제어하며, 계정이나 키가 필요 없어요. 에이전트가 앱을 처음 사용하면 macOS가 OpenBot이 그 앱을 제어해도 되는지 물어요. 나중에 바꾸려면 시스템 설정 › 개인정보 보호 및 보안 › 자동화를 여세요. 에이전트는 이메일과 iMessage를 보내고 이벤트, 연락처, 미리 알림을 변경하거나 삭제할 수 있으니, 승인하기 전에 각 쓰기를 확인하세요. 이메일 본문처럼 도구가 읽은 내용은 에이전트의 모델 제공자에게 전송돼요.",
+    "Apple apps를 사용하면 에이전트가 이 Mac의 Mail, 캘린더, 연락처, 미리 알림, 메모, 메시지, Safari를 사용할 수 있어요. macOS에서만 작동해요. OpenBot은 mcp-icloud를 시작해요. Apple이나 OpenBot이 만들지 않은 커뮤니티 서버예요. 서버는 이 컴퓨터에서 AppleScript로 앱을 제어하며, 계정이나 키가 필요 없어요. 설치할 때 OpenBot이 이 모든 앱에 대한 접근을 macOS에 한 번에 요청할 수 있어요. 앱마다 확인 창이 하나씩 떠요. 요청하지 않으면 에이전트가 앱을 처음 사용할 때 macOS가 물어요. 나중에 바꾸려면 시스템 설정 › 개인정보 보호 및 보안 › 자동화를 여세요. 에이전트는 이메일과 iMessage를 보내고 이벤트, 연락처, 미리 알림을 변경하거나 삭제할 수 있으니, 승인하기 전에 각 쓰기를 확인하세요. 이메일 본문처럼 도구가 읽은 내용은 에이전트의 모델 제공자에게 전송돼요.",
   "marketplace.plugin.appleApps.app":
     "Mail, 캘린더, 연락처, 미리 알림, 메모, 메시지, Safari를 로컬 mcp-icloud 서버로 사용해요. macOS와 자동화 권한이 필요해요.",
   "marketplace.plugin.appleApps.prompt.unread": "Apple Mail에서 오늘 읽지 않은 이메일을 요약해 줘.",

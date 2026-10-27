@@ -2,6 +2,7 @@ import type {
   AddedAgent,
   ClientAgentSummary,
   InstalledSkill,
+  MacAutomationTarget,
   MarketplaceAgentDetail,
   MarketplaceAgentSummary,
   MarketplaceSkillDetail,
@@ -22,6 +23,7 @@ import type {
   MarketplaceApp,
   MarketplaceAppConnection,
   MarketplaceAppStatus,
+  MarketplaceMacAutomation,
   MarketplaceModel,
   SkillRead,
 } from "@openbot/ui/features/marketplace/marketplace-model";
@@ -78,6 +80,8 @@ export interface MarketplaceControllerProps {
   connectors?: ConnectorRegistry | undefined;
   /** What the Marketplace calls. Absent: this computer's bridge. */
   calls?: MarketplaceCalls | undefined;
+  /** This computer runs macOS, so an app that drives Apple apps can ask for their Automation access. */
+  macOS?: boolean | undefined;
   /** Opens the form that adds a custom MCP server. Absent when the user cannot add one. */
   onAddServer?: (() => void) | undefined;
 }
@@ -88,6 +92,17 @@ export interface PendingConnect {
   flow: McpConnectFlow;
   settle: (config: McpServerConfig | null) => void;
 }
+
+/** The name macOS shows for each Apple app, in the reader's language. */
+const MAC_AUTOMATION_APP_NAME = {
+  calendar: "marketplace.app.automation.app.calendar",
+  contacts: "marketplace.app.automation.app.contacts",
+  mail: "marketplace.app.automation.app.mail",
+  notes: "marketplace.app.automation.app.notes",
+  reminders: "marketplace.app.automation.app.reminders",
+  messages: "marketplace.app.automation.app.messages",
+  safari: "marketplace.app.automation.app.safari",
+} as const satisfies Record<MacAutomationTarget, string>;
 
 /** How often the page of a relayed sign-in is read while it waits. */
 const SIGN_IN_RELAY_POLL_MS = 1_000;
@@ -690,8 +705,42 @@ export function createMarketplaceController(props: MarketplaceControllerProps) {
     if (installed) await readSignIns(serverId);
     mark(key, false);
     if (installed) setNotice(t("marketplace.notice.appConnected", { name: plugin.name }));
+    if (installed && askAccessOnInstall()) await requestPluginAccess(plugin);
     return installed === true;
   }
+
+  const [askAccessOnInstall, setAskAccessOnInstall] = createSignal(true);
+  /** macOS asks only on the computer that runs the server, and only the desktop app can make it ask. */
+  const requestMacAutomation = () => (props.macOS && !props.pluginHostName ? calls().macAutomation : undefined);
+
+  /**
+   * Makes macOS show the Automation prompt of each Apple app that the plugin drives, one after the
+   * other, so the prompts come now and not in the middle of an agent's task. The app stays installed
+   * whatever the user answers.
+   */
+  async function requestPluginAccess(plugin: MarketplacePluginDetail) {
+    const request = requestMacAutomation();
+    const targets = [...new Set(plugin.apps.flatMap((app) => app.macAutomation ?? []))];
+    const key = `app:${plugin.slug}`;
+    if (!request || targets.length === 0 || busy[key]) return;
+    mark(key, true);
+    const results = await run(() => request(targets));
+    mark(key, false);
+    if (!results) return;
+    const refused = results.filter((result) => result.status !== "granted");
+    if (refused.length === 0) {
+      setNotice(t("marketplace.app.automation.allowed"));
+      return;
+    }
+    const apps = format.list(refused.map((result) => t(MAC_AUTOMATION_APP_NAME[result.target])));
+    setError(t("marketplace.app.automation.refused", { apps }));
+  }
+
+  const macAutomation: MarketplaceMacAutomation = {
+    askOnInstall: askAccessOnInstall,
+    setAskOnInstall: setAskAccessOnInstall,
+    request: (app) => requestPluginAccess(app.plugin),
+  };
 
   /**
    * The connect step of one held app again, saved over its row: a new key, a new sign-in, or a
@@ -883,6 +932,9 @@ export function createMarketplaceController(props: MarketplaceControllerProps) {
     reconnectApp: (app, appId) => reconnectPluginApp(app.plugin, appId),
     get appHostName() {
       return props.pluginHostName;
+    },
+    get macAutomation() {
+      return requestMacAutomation() ? macAutomation : undefined;
     },
     disconnectApp: (app) => setUninstalling(app.plugin),
     removeServer,

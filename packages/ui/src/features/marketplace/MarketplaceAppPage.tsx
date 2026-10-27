@@ -19,6 +19,7 @@ import {
   Link2,
   Plug,
   SettingsSection,
+  SwitchField,
   Text,
   TriangleAlert,
 } from "@openbot/ui";
@@ -36,6 +37,7 @@ import {
   type MarketplaceApp,
   type MarketplaceAppConnection,
   type MarketplaceAppStatus,
+  type MarketplaceMacAutomation,
   pluginAppSetup,
 } from "./marketplace-model";
 import { type MarketplaceScope, serverAddress } from "./marketplace-view";
@@ -65,6 +67,10 @@ function PluginAppPage(props: { scope: MarketplaceScope; app: PluginApp }) {
     ].flatMap((link) => (link.url ? [{ label: link.label, url: link.url, text: pluginLinkText(link.url) }] : []));
   /** The first app whose server refused its saved sign-in. */
   const refused = () => plugin().apps.find((app) => props.app.connections[app.id]?.signInNeeded);
+  const automation = () =>
+    model().canConnectApps() && plugin().apps.some((app) => app.macAutomation?.length)
+      ? model().macAutomation
+      : undefined;
   const runPrompt = () => {
     const run = model().runPrompt;
     if (!run) return undefined;
@@ -161,6 +167,9 @@ function PluginAppPage(props: { scope: MarketplaceScope; app: PluginApp }) {
             <For each={plugin().apps}>
               {(entry) => <ConnectionRow scope={props.scope} app={props.app} entry={entry} />}
             </For>
+            <Show when={automation()}>
+              {(current) => <AutomationRow scope={props.scope} app={props.app} automation={current()} />}
+            </Show>
           </ItemGroup>
         </SettingsSection>
       </Show>
@@ -272,6 +281,48 @@ function ConnectionRow(props: { scope: MarketplaceScope; app: PluginApp; entry: 
         </ItemActions>
       </Show>
     </Item>
+  );
+}
+
+/**
+ * The Automation access of the Apple apps that a plugin drives. Before the install, the switch says
+ * whether the install asks macOS; after it, the button asks again, such as for an app added later.
+ */
+function AutomationRow(props: { scope: MarketplaceScope; app: PluginApp; automation: MarketplaceMacAutomation }) {
+  const { t } = useText();
+  const busy = () => props.scope.model.appBusy(props.app.id);
+  return (
+    <Show
+      when={props.app.status === "idle"}
+      fallback={
+        <Item class="settings-modal-row">
+          <ItemContent>
+            <ItemTitle>{t("marketplace.app.automation.title")}</ItemTitle>
+            <ItemDescription>{t("marketplace.app.automation.description")}</ItemDescription>
+          </ItemContent>
+          <ItemActions>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy()}
+              onClick={() => void props.automation.request(props.app)}
+            >
+              {t("marketplace.app.automation.request")}
+            </Button>
+          </ItemActions>
+        </Item>
+      }
+    >
+      <SwitchField
+        class="settings-modal-row"
+        checked={props.automation.askOnInstall()}
+        disabled={busy()}
+        onChange={(checked) => props.automation.setAskOnInstall(checked)}
+        label={t("marketplace.app.automation.askOnInstall")}
+        description={t("marketplace.app.automation.description")}
+      />
+    </Show>
   );
 }
 

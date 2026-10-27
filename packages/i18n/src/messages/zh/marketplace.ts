@@ -129,6 +129,20 @@ export const messages = {
   "marketplace.app.setup.desktopConnected": "已连接到 {address}。",
   "marketplace.app.setup.open": "无需登录或密钥。",
   "marketplace.app.connectAgain": "再次连接",
+  "marketplace.app.automation.askOnInstall": "安装时向 macOS 请求访问权限",
+  "marketplace.app.automation.title": "Apple 应用访问权限",
+  "marketplace.app.automation.description": "macOS 会为每个应用显示一次提示。已关闭的应用会短暂打开，然后退出。",
+  "marketplace.app.automation.request": "请求访问",
+  "marketplace.app.automation.allowed": "OpenBot 现在可以控制所有 Apple 应用。",
+  "marketplace.app.automation.refused":
+    "macOS 没有授予对 {apps} 的访问权限。在系统设置 › 隐私与安全性 › 自动化中允许 OpenBot。",
+  "marketplace.app.automation.app.calendar": "日历",
+  "marketplace.app.automation.app.contacts": "通讯录",
+  "marketplace.app.automation.app.mail": "邮件",
+  "marketplace.app.automation.app.notes": "备忘录",
+  "marketplace.app.automation.app.reminders": "提醒事项",
+  "marketplace.app.automation.app.messages": "信息",
+  "marketplace.app.automation.app.safari": "Safari",
   "marketplace.app.signInTitle": "请重新登录 {name}",
   "marketplace.app.signInDescription": "{name} 拒绝了已保存的登录。重新登录之前，你的助手无法使用它。",
 
@@ -188,7 +202,7 @@ export const messages = {
   "marketplace.plugin.paper.prompt.tokens": "列出打开的 Paper 文件中的设计 token，并与我们的主题对比。",
   "marketplace.plugin.appleApps.tagline": "Mac 上的邮件、日历等",
   "marketplace.plugin.appleApps.description":
-    "Apple apps 让助手使用这台 Mac 上的邮件、日历、通讯录、提醒事项、备忘录、信息和 Safari。它仅适用于 macOS。OpenBot 会启动 mcp-icloud，这是一个社区服务器，不是 Apple 或 OpenBot 制作的。该服务器在这台电脑上通过 AppleScript 控制这些应用，不需要账号和密钥。助手第一次使用某个应用时，macOS 会询问是否允许 OpenBot 控制它。如需之后更改，打开系统设置 › 隐私与安全性 › 自动化。助手可以发送邮件和 iMessage，并修改或删除日程、联系人和提醒事项，因此请在批准前检查每次写入。工具读取的内容（例如邮件正文）会发送给助手的模型提供商。",
+    "Apple apps 让助手使用这台 Mac 上的邮件、日历、通讯录、提醒事项、备忘录、信息和 Safari。它仅适用于 macOS。OpenBot 会启动 mcp-icloud，这是一个社区服务器，不是 Apple 或 OpenBot 制作的。该服务器在这台电脑上通过 AppleScript 控制这些应用，不需要账号和密钥。安装时，OpenBot 可以一次性向 macOS 请求访问所有这些应用，每个应用显示一次提示。如果不这样做，macOS 会在助手第一次使用某个应用时询问。如需之后更改，打开系统设置 › 隐私与安全性 › 自动化。助手可以发送邮件和 iMessage，并修改或删除日程、联系人和提醒事项，因此请在批准前检查每次写入。工具读取的内容（例如邮件正文）会发送给助手的模型提供商。",
   "marketplace.plugin.appleApps.app":
     "通过本地 mcp-icloud 服务器使用邮件、日历、通讯录、提醒事项、备忘录、信息和 Safari。需要 macOS 和自动化权限。",
   "marketplace.plugin.appleApps.prompt.unread": "总结我今天在 Apple 邮件中的未读邮件。",

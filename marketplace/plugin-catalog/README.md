@@ -89,6 +89,14 @@ The listing uses local mode only: the server controls the apps on this Mac
 through AppleScript and needs no key. Its cloud mode needs
 `USE_LOCAL_MODE=false`, and a listing cannot set a fixed environment value.
 
+The app lists `macAutomation`: the Apple apps that the server drives. On a Mac
+that runs the server, the listing page shows a switch, on by default, that asks
+macOS for each app right after the install, and later an "Ask for access"
+button. OpenBot sends one harmless Apple Event (`count windows`) to each app, so
+macOS shows its Automation prompt then and not during an agent's task. An app
+that the request opened is quit again. macOS does not ask again for an app that
+the user refused.
+
 Troubleshooting:
 
 - An error `-1743` ("not authorized to send Apple events"): the user refused

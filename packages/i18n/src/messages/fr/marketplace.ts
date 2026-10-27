@@ -122,6 +122,21 @@ export const messages = {
   "marketplace.app.setup.desktopConnected": "Connecté à {address}.",
   "marketplace.app.setup.open": "Aucune connexion ni clé requise.",
   "marketplace.app.connectAgain": "Reconnecter",
+  "marketplace.app.automation.askOnInstall": "Demander l’accès à macOS à l’installation",
+  "marketplace.app.automation.title": "Accès aux apps Apple",
+  "marketplace.app.automation.description":
+    "macOS affiche une demande pour chaque app. Une app fermée s’ouvre un instant, puis se ferme.",
+  "marketplace.app.automation.request": "Demander l’accès",
+  "marketplace.app.automation.allowed": "OpenBot peut maintenant contrôler toutes les apps Apple.",
+  "marketplace.app.automation.refused":
+    "macOS n’a pas donné l’accès à {apps}. Autorisez OpenBot dans Réglages Système › Confidentialité et sécurité › Automatisation.",
+  "marketplace.app.automation.app.calendar": "Calendrier",
+  "marketplace.app.automation.app.contacts": "Contacts",
+  "marketplace.app.automation.app.mail": "Mail",
+  "marketplace.app.automation.app.notes": "Notes",
+  "marketplace.app.automation.app.reminders": "Rappels",
+  "marketplace.app.automation.app.messages": "Messages",
+  "marketplace.app.automation.app.safari": "Safari",
   "marketplace.app.signInTitle": "Reconnectez-vous à {name}",
   "marketplace.app.signInDescription":
     "{name} a refusé la connexion enregistrée. Vos agents ne peuvent pas l’utiliser tant que vous ne vous reconnectez pas.",
@@ -201,7 +216,7 @@ export const messages = {
     "Listez les tokens de design du fichier Paper ouvert et comparez-les avec notre thème.",
   "marketplace.plugin.appleApps.tagline": "Mail, Calendrier et plus sur votre Mac",
   "marketplace.plugin.appleApps.description":
-    "Apple apps permet aux agents d’utiliser Mail, Calendrier, Contacts, Rappels, Notes, Messages et Safari sur ce Mac. Il fonctionne uniquement sous macOS. OpenBot démarre mcp-icloud, un serveur communautaire qui n’est fait ni par Apple ni par OpenBot. Le serveur contrôle les apps via AppleScript, sur cet ordinateur, et ne demande ni compte ni clé. La première fois qu’un agent utilise une app, macOS demande si OpenBot peut la contrôler. Pour changer ce choix plus tard, ouvrez Réglages Système › Confidentialité et sécurité › Automatisation. Les agents peuvent envoyer des e-mails et des iMessages, et modifier ou supprimer des événements, des contacts et des rappels : vérifiez chaque écriture avant de l’approuver. Ce que les outils lisent, comme le texte des e-mails, est envoyé au fournisseur du modèle de l’agent.",
+    "Apple apps permet aux agents d’utiliser Mail, Calendrier, Contacts, Rappels, Notes, Messages et Safari sur ce Mac. Il fonctionne uniquement sous macOS. OpenBot démarre mcp-icloud, un serveur communautaire qui n’est fait ni par Apple ni par OpenBot. Le serveur contrôle les apps via AppleScript, sur cet ordinateur, et ne demande ni compte ni clé. À l’installation, OpenBot peut demander à macOS l’accès à toutes ces apps en une fois, avec une demande par app. Sinon, macOS demande la première fois qu’un agent utilise une app. Pour changer ce choix plus tard, ouvrez Réglages Système › Confidentialité et sécurité › Automatisation. Les agents peuvent envoyer des e-mails et des iMessages, et modifier ou supprimer des événements, des contacts et des rappels : vérifiez chaque écriture avant de l’approuver. Ce que les outils lisent, comme le texte des e-mails, est envoyé au fournisseur du modèle de l’agent.",
   "marketplace.plugin.appleApps.app":
     "Mail, Calendrier, Contacts, Rappels, Notes, Messages et Safari, via le serveur local mcp-icloud. Demande macOS et l’accès Automatisation.",
   "marketplace.plugin.appleApps.prompt.unread": "Résumez mes e-mails non lus d’aujourd’hui dans Apple Mail.",

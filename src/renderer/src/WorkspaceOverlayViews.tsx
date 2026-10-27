@@ -77,6 +77,8 @@ export function MarketplaceOverlay(props: {
   connectors?: ConnectorRegistry | undefined;
   /** What the Marketplace calls. Absent: this computer's bridge. */
   calls?: MarketplaceCalls | undefined;
+  /** This computer runs macOS. The web client leaves it out: it cannot ask macOS for anything. */
+  macOS?: boolean | undefined;
   /** Opens the form that adds a custom MCP server to the server with this ID. */
   onAddServer?: ((serverId: string) => void) | undefined;
 }) {
@@ -119,6 +121,7 @@ export function MarketplaceOverlay(props: {
         <MarketplaceModal
           open={true}
           calls={props.calls}
+          macOS={props.macOS}
           connectors={props.connectors}
           agents={manage() ? props.agents : []}
           activeAgentId={manage() ? props.activeAgentId : ""}
