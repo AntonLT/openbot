@@ -63,6 +63,12 @@ export interface AcpFlavor {
    */
   promptOpenForBackgroundTasks?: true;
   /**
+   * The agent answers a finished background task in a turn of its own and sends no session update
+   * for it. Only its `session/load` replays that turn. A tool call that leaves a task running ends
+   * with `rawOutput.metadata.status` "running" and the task's `sessionID`.
+   */
+  unsentBackgroundTurns?: true;
+  /**
    * The agent keeps one MCP server of each name for a directory, and a session that opens there
    * replaces the server that the others in it use. Their OpenBot servers then share one token.
    */

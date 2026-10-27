@@ -357,6 +357,43 @@ one with `-32000` "provider authentication required" and no provider ID. `OPENCO
 maps that code to `error.provider.opencodeAuthRequired`, which names the provider from the model ID
 before its first `/` and lists the fixes: a Free model, a Go key, or `opencode auth login`.
 
+#### Turns of a background subagent
+
+OpenCode 2.2.0 sends session updates only for the execution that a `session/prompt` starts. When a
+background subagent ends, OpenCode answers its result in a turn of its own (a `synthetic` row with
+`source: subagent` in its store), and no update of that turn reaches the client (#3406). The flag
+`unsentBackgroundTurns` of `OPENCODE_ACP_FLAVOR` turns on the recovery in `acp-client.ts`:
+
+- A tool call that ends with `rawOutput.metadata.status` "running" and a `sessionID` started a
+  background task. OpenBot then watches the session for 30 minutes, and longer while it changes.
+  The idle pool does not close a watched session, because a closed one never reports the result.
+- Every 2 seconds, when no prompt runs, OpenBot reads `session/list`. When the session's
+  `updatedAt` changes, it sends `session/load` with the session's own MCP servers, and collects the
+  replay apart from live updates. A prompt waits for that load.
+- The client keeps the ACP `messageId` of each message and the ID of each tool call that the chat
+  showed. The replay's entries after the last shown one, and the updates of the tool calls that are
+  still open, go through the live update path in a turn with `unprompted: true`. As for Claude
+  (#1904), no delivery attaches to that turn, and a message sent meanwhile fails with
+  `ProviderTurnActiveError` and waits in the queue.
+- OpenBot ends that turn when the session sends nothing new for 15 seconds and no tool call is open,
+  or after the stall limit while one is. A step that writes for longer can split one turn in two;
+  nothing is lost. A stop cancels the turn, and the next replay marks the rest of it as shown.
+
+The watch is in memory. A background task that ends while OpenBot is closed, or after OpenBot
+loaded the session again, shows only in OpenCode's own store.
+
+#### Narration
+
+Text that an ACP agent writes before a tool call in the same turn is an `agentMessage` item with
+phase `narration` (`CONVERSATION_NARRATION_ITEM_TYPE`), not `commentary`. A text of another ACP
+`messageId` also ends the text before it as narration, so two steps' texts are not joined into one
+line. The desktop chat shows narration as a message, and the steps of the turn between its messages:
+the steps before each message stand above it, and the last message holds the rest, the memory
+changes and the trace. Narration is not the turn's answer (`latestTurnAnswer`): it does not count as
+unread, set the preview, go to a messaging app, or show as a channel reply, where it folds into
+the steps as commentary. Claude, Codex and Pi still send such text as commentary. Rows stored before
+this change keep `commentary`.
+
 Provider session IDs remain in `projection_provider_sessions`; migration 17 adds OpenCode while
 preserving turn links. Provider switches keep the same agent, workspace, and local thread.
 Migrations 17, 22, 23, 24 and 26 widen the table's provider `CHECK`. Migration 28 removes it, so a
@@ -511,9 +548,9 @@ a delivery that runs again keeps its turn ID) and adds `thoughtTokens` to the ou
 
 Antigravity 1.3.0 keeps `session/prompt` open until its harness reports
 `STATE_FULLY_IDLE`. A background task can thus keep a turn open after answer text
-arrives. The adapter streams that text at once. A later tool or thought changes
-the same message to commentary. It does not use a quiet period or a usage update
-as proof that the turn ended.
+arrives. The adapter streams that text at once. A later tool call changes the same
+message to narration, and a later thought changes it to commentary. It does not use
+a quiet period or a usage update as proof that the turn ended.
 
 Stop sends `session/cancel`, ends the local turn, and saves unfinished tool calls
 as interrupted. Before the next message, `session/resume` rebuilds the harness

@@ -5,6 +5,7 @@ import type {
   RoutineResultConnectionOption,
 } from "@openbot/contracts/ipc";
 import {
+  CONVERSATION_NARRATION_ITEM_TYPE,
   CONVERSATION_PLAN_ITEM_TYPE,
   CONVERSATION_SUBAGENTS_ITEM_TYPE,
   MESSAGING_LIMITS,
@@ -756,6 +757,7 @@ function isAnswer(message: ConversationMessage): boolean {
   return (
     message.author === "assistant" &&
     message.itemType !== "commentary" &&
+    message.itemType !== CONVERSATION_NARRATION_ITEM_TYPE &&
     message.itemType !== "question_prompt" &&
     message.itemType !== CONVERSATION_PLAN_ITEM_TYPE &&
     message.itemType !== CONVERSATION_SUBAGENTS_ITEM_TYPE &&

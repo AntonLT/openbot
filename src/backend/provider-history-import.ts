@@ -1,5 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
-import { type AgentProviderId, type ConversationMessage, ROUTINE_QUIET_ANSWER_ITEM_TYPE } from "@openbot/contracts/ipc";
+import {
+  type AgentProviderId,
+  CONVERSATION_NARRATION_ITEM_TYPE,
+  type ConversationMessage,
+  ROUTINE_QUIET_ANSWER_ITEM_TYPE,
+} from "@openbot/contracts/ipc";
 import { Effect } from "effect";
 import { isImageGenerationItem } from "./agent/image-generation";
 import { isNoUpdateAnswer, isNoUpdateToolCall, isTextAnswer, keptQuietAnswer } from "./agent/routine-quiet-runs";
@@ -300,7 +305,13 @@ function routineTurnAnswers(
           // A completed delivery with an error is a run whose agent reported a failure: never quiet.
           if (delivery?.status === "completed" && delivery.error !== null) failureReported = true;
         }
-        if (item.type === "agentMessage" && typeof item.text === "string" && item.text && item.phase !== "commentary") {
+        if (
+          item.type === "agentMessage" &&
+          typeof item.text === "string" &&
+          item.text &&
+          item.phase !== "commentary" &&
+          item.phase !== CONVERSATION_NARRATION_ITEM_TYPE
+        ) {
           if (isNoUpdateAnswer(item.text)) markers += 1;
           else reported = true;
         }
@@ -326,7 +337,11 @@ function keptRoutineMessage(routine: Exclude<RoutineTurnAnswers, "none">) {
       return keptQuietAnswer(message) ? [{ ...message, itemType: ROUTINE_QUIET_ANSWER_ITEM_TYPE }] : [];
     }
     if (routine === "image") return isTextAnswer(message) ? [] : [message];
-    return message.itemType === "commentary" || !isNoUpdateAnswer(message.text) ? [message] : [];
+    return message.itemType === "commentary" ||
+      message.itemType === CONVERSATION_NARRATION_ITEM_TYPE ||
+      !isNoUpdateAnswer(message.text)
+      ? [message]
+      : [];
   };
 }
 

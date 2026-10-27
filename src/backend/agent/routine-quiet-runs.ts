@@ -1,4 +1,5 @@
 import {
+  CONVERSATION_NARRATION_ITEM_TYPE,
   CONVERSATION_PLAN_ITEM_TYPE,
   CONVERSATION_SUBAGENTS_ITEM_TYPE,
   type ConversationMessage,
@@ -109,10 +110,11 @@ export function isTextAnswer(message: ConversationMessage): boolean {
   );
 }
 
-/** Thinking, the plan and the subagents: how the agent worked, not what it reports. */
+/** Thinking, notes between tool calls, the plan and the subagents: how the agent worked, not what it reports. */
 function isWorkNote(message: ConversationMessage): boolean {
   return (
     message.itemType === "commentary" ||
+    message.itemType === CONVERSATION_NARRATION_ITEM_TYPE ||
     message.itemType === CONVERSATION_PLAN_ITEM_TYPE ||
     message.itemType === CONVERSATION_SUBAGENTS_ITEM_TYPE
   );

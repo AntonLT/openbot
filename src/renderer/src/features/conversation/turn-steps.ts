@@ -8,6 +8,18 @@ import type { TurnStepLines } from "./turn-step-lines";
 
 const NO_STEPS: AgentStep[] = [];
 
+/**
+ * Where an answer of a turn stands among the turn's steps. The steps after the previous answer, up
+ * to this one, show above it. The last answer of a finished turn also takes the later steps, the
+ * memory changes and the trace.
+ */
+interface AnswerSegment {
+  turnId: string;
+  after: number;
+  through: number;
+  last: boolean;
+}
+
 /** The id of a subagent's span in a trace is this prefix and the subagent id. */
 export const SUBAGENT_SPAN_PREFIX = "subagent:";
 /** The id of the span of another agent's reply is this prefix and the id of the reply message. */
@@ -175,12 +187,13 @@ export function createTurnSteps(deps: {
   // so a line shows between the thoughts it came between. A thought with no time (from a client
   // that does not send one) uses the time this window first saw it.
   const seenAt = new Map<string, number>();
-  const lists = new Map<string, AgentStep[]>();
+  const lists = new Map<string, Map<string, AgentStep[]>>();
   const sources = createMemo(() => {
     const thinking = new Map<string, AgentMessage>();
     const memory = new Map<string, AgentMessage>();
     const subagents = new Map<string, AgentMessage>();
-    const answers = new Map<string, string>();
+    // Each answer of a turn, in order. Text that the agent writes before a tool call is one.
+    const answers = new Map<string, { id: string; at: number }[]>();
     const answerTimes = new Map<string, string>();
     const startTimes = new Map<string, string>();
     const traces = new Map<string, ConversationTurnTrace>();
@@ -198,8 +211,12 @@ export function createTurnSteps(deps: {
       if (message.kind === "thinking") thinking.set(turnId, message);
       else if (message.kind === "memory-changes") memory.set(turnId, message);
       else if (message.kind === "subagents") subagents.set(turnId, message);
-      else if (isTurnAnswer(message) && !answers.has(turnId)) {
-        answers.set(turnId, message.id);
+      else if (isTurnAnswer(message)) {
+        answers.set(turnId, [
+          ...(answers.get(turnId) ?? []),
+          { id: message.id, at: Date.parse(message.createdAt ?? "") },
+        ]);
+        // The last answer ends the turn.
         if (message.createdAt) answerTimes.set(turnId, message.createdAt);
       }
     }
@@ -243,11 +260,14 @@ export function createTurnSteps(deps: {
     return timed.sort((left, right) => left.at - right.at);
   }
 
-  function stepsOf(turnId: string | null | undefined): AgentStep[] {
+  /** The steps of a turn, or of one answer's part of it. */
+  function stepsOf(turnId: string | null | undefined, segment?: { key: string } & AnswerSegment): AgentStep[] {
     if (!turnId) return [];
     const { memory } = sources();
-    const steps = timedSteps(turnId).map(({ step }) => step);
-    const changes = memory.get(turnId);
+    const steps = timedSteps(turnId)
+      .filter(({ at }) => !segment || (at > segment.after && at <= segment.through))
+      .map(({ step }) => step);
+    const changes = segment && !segment.last ? undefined : memory.get(turnId);
     if (changes?.memoryChanges) {
       for (const [index, change] of changes.memoryChanges.entries())
         steps.push({ id: `${changes.id}:${index}`, kind: "memory", change });
@@ -256,9 +276,12 @@ export function createTurnSteps(deps: {
     }
     // Each streamed word changes the messages. A turn whose steps did not change keeps its list, so
     // its row does not draw again.
-    const previous = lists.get(turnId);
+    const key = segment?.key ?? turnId;
+    const turnLists = lists.get(turnId) ?? new Map<string, AgentStep[]>();
+    lists.set(turnId, turnLists);
+    const previous = turnLists.get(key);
     if (previous && sameSteps(previous, steps)) return previous;
-    lists.set(turnId, steps);
+    turnLists.set(key, steps);
     return steps;
   }
 
@@ -290,22 +313,54 @@ export function createTurnSteps(deps: {
     return { timed, stored, ran, answerAt, turnStart, turnEnd };
   }
 
-  /** The finished turn whose steps show above this message: the first answer of the turn. */
-  const turnOfAnswer = createMemo(() => {
+  /**
+   * The answers that have steps above them. The last answer of the running turn has none yet: its
+   * steps show on the activity line. Answers with no time cannot be placed, so only the last one of
+   * such a turn takes the steps.
+   */
+  const answerSegments = createMemo(() => {
     const active = deps.activeTurnId();
-    const turns = new Map<string, string>();
-    for (const [turnId, messageId] of sources().answers) if (turnId !== active) turns.set(messageId, turnId);
-    return turns;
+    const segments = new Map<string, AnswerSegment>();
+    for (const [turnId, list] of sources().answers) {
+      const timed = list.every(({ at }) => Number.isFinite(at));
+      for (const [index, answer] of list.entries()) {
+        const last = index === list.length - 1;
+        if ((last && turnId === active) || (!last && !timed)) continue;
+        segments.set(answer.id, {
+          turnId,
+          after: index === 0 || !timed ? Number.NEGATIVE_INFINITY : (list[index - 1]?.at ?? Number.NEGATIVE_INFINITY),
+          through: last ? Number.POSITIVE_INFINITY : answer.at,
+          last,
+        });
+      }
+    }
+    return segments;
   });
+
+  /** The turn of an answer whose steps row holds the whole turn: its facts and its trace. */
+  const lastAnswerTurn = (messageId: string | undefined): string | undefined => {
+    const segment = messageId === undefined ? undefined : answerSegments().get(messageId);
+    return segment?.last ? segment.turnId : undefined;
+  };
 
   return {
     /**
-     * The steps of the running turn, for the activity line. None once the turn writes its answer: the
-     * activity line is under the answer, and the steps then show above it when the turn ends.
+     * The steps of the running turn after its latest answer, for the activity line under it. None
+     * while that answer streams, and the steps then show above the answer when the turn ends.
      */
     activeSteps: createMemo(() => {
       const turnId = deps.activeTurnId();
-      return turnId && sources().answers.has(turnId) ? NO_STEPS : stepsOf(turnId);
+      const latest = turnId ? sources().answers.get(turnId)?.at(-1) : undefined;
+      if (!turnId || !latest) return stepsOf(turnId);
+      if (!Number.isFinite(latest.at)) return NO_STEPS;
+      const steps = stepsOf(turnId, {
+        key: "active",
+        turnId,
+        after: latest.at,
+        through: Number.POSITIVE_INFINITY,
+        last: false,
+      });
+      return steps.length > 0 ? steps : NO_STEPS;
     }),
     /**
      * The steps of the channel turns that run, while they have no answer. A channel runs several turns
@@ -314,17 +369,22 @@ export function createTurnSteps(deps: {
     workingSteps(turnIds: readonly string[]): AgentStep[] {
       const { answers } = sources();
       const turns = turnIds.filter((turnId) => !answers.has(turnId));
-      return turns.length === 0 ? NO_STEPS : turns.flatMap(stepsOf);
+      return turns.length === 0 ? NO_STEPS : turns.flatMap((turnId) => stepsOf(turnId));
     },
     /** The steps above an answer, or undefined for a message that has none. */
     stepsAbove(messageId: string | undefined): AgentStep[] | undefined {
-      const turnId = messageId === undefined ? undefined : turnOfAnswer().get(messageId);
-      const steps = stepsOf(turnId);
+      const segment = messageId === undefined ? undefined : answerSegments().get(messageId);
+      if (!messageId || !segment) return undefined;
+      const steps = stepsOf(segment.turnId, { key: messageId, ...segment });
       return steps.length > 0 ? steps : undefined;
+    },
+    /** Whether the steps row above an answer opens the trace of the whole turn: only the last one does. */
+    tracedAbove(messageId: string | undefined): boolean {
+      return lastAnswerTurn(messageId) !== undefined;
     },
     /** The time that the turn of an answer took, and how many of its steps and subagents failed. */
     factsAbove(messageId: string | undefined): AgentStepsFacts | undefined {
-      const turnId = messageId === undefined ? undefined : turnOfAnswer().get(messageId);
+      const turnId = lastAnswerTurn(messageId);
       const turn = turnId === undefined ? undefined : turnBounds(turnId);
       if (!turn) return undefined;
       const failedSteps = turn.stored?.steps.filter((step) => step.failed === true).length ?? 0;
@@ -339,7 +399,7 @@ export function createTurnSteps(deps: {
      * message to the reply, or to the turn's end when the reply came later.
      */
     traceAbove(messageId: string | undefined, labels: TraceLabels): TraceSpan[] {
-      const turnId = messageId === undefined ? undefined : turnOfAnswer().get(messageId);
+      const turnId = lastAnswerTurn(messageId);
       const turn = turnId === undefined ? undefined : turnBounds(turnId);
       if (!turnId || !turn) return [];
       const { sent, replies } = sources();

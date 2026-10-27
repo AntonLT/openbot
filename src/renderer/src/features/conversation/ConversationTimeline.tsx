@@ -1187,7 +1187,7 @@ export function ConversationTimeline() {
                           <AgentStepsDisclosure
                             steps={steps()}
                             defaultOpen={showAgentSteps()}
-                            trace={traceAbove(message()?.id)}
+                            trace={turnSteps.tracedAbove(message()?.id) ? traceAbove(message()?.id) : undefined}
                             facts={turnSteps.factsAbove(message()?.id)}
                           />
                         </ChatRowBoundary>

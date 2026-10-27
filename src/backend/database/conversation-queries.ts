@@ -10,6 +10,7 @@ import type {
   ConversationSnapshot,
 } from "@openbot/contracts/ipc";
 import {
+  CONVERSATION_NARRATION_ITEM_TYPE,
   HOSTED_SITE_EVENT_ITEM_TYPE_PREFIX,
   isAttachmentSummary,
   MARKETPLACE_SUGGESTION_ITEM_TYPE_PREFIX,
@@ -175,6 +176,7 @@ export class ConversationQueries {
                    WHERE message.thread_id = thread.thread_id
                      AND json_extract(message.message_json, '$.author') IN ('assistant', 'agent')
                      AND COALESCE(json_extract(message.message_json, '$.itemType'), '') != 'commentary'
+                     AND COALESCE(json_extract(message.message_json, '$.itemType'), '') != '${CONVERSATION_NARRATION_ITEM_TYPE}'
                      AND COALESCE(json_extract(message.message_json, '$.itemType'), '') != 'question_prompt'
                      AND COALESCE(json_extract(message.message_json, '$.itemType'), '') != 'agent_attachment'
                      AND COALESCE(json_extract(message.message_json, '$.itemType'), '') NOT LIKE '${CHAT_VISUAL_ITEM_TYPE_PREFIX}%'

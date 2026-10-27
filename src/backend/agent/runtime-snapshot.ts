@@ -9,6 +9,7 @@ import {
   type AgentPromptQuestion,
   type AgentRuntimeSnapshot,
   type AgentSummary,
+  CONVERSATION_NARRATION_ITEM_TYPE,
   CONVERSATION_PLAN_ITEM_TYPE,
   CONVERSATION_SUBAGENTS_ITEM_TYPE,
   ROUTINE_QUIET_ANSWER_ITEM_TYPE,
@@ -179,6 +180,7 @@ export function buildRuntimeSnapshot({
         // A message that another agent sent to this one is not a reply to the user.
         !message.senderAgentId &&
         message.itemType !== "commentary" &&
+        message.itemType !== CONVERSATION_NARRATION_ITEM_TYPE &&
         message.itemType !== "question_prompt" &&
         message.itemType !== "agent_attachment" &&
         !message.itemType?.startsWith(CHAT_VISUAL_ITEM_TYPE_PREFIX) &&

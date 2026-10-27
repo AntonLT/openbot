@@ -5,6 +5,7 @@ import {
   type AgentSummary,
   CONTEXT_RESET_ITEM_TYPE,
   CONVERSATION_MEMORY_CHANGES_ITEM_TYPE,
+  CONVERSATION_NARRATION_ITEM_TYPE,
   CONVERSATION_PLAN_ITEM_TYPE,
   CONVERSATION_SUBAGENTS_ITEM_TYPE,
   type ConversationReadState,
@@ -260,6 +261,7 @@ export class ConversationReadStore {
     const parameters = boundaryKey ? [threadId, ...boundaryKey] : [threadId];
     const unreadFilter = `author != 'user'
       AND COALESCE(item_type, '') != 'commentary'
+      AND COALESCE(item_type, '') != '${CONVERSATION_NARRATION_ITEM_TYPE}'
       AND COALESCE(item_type, '') != 'plan'
       AND COALESCE(item_type, '') != 'subagents'
       AND COALESCE(item_type, '') != '${CONVERSATION_MEMORY_CHANGES_ITEM_TYPE}'
@@ -365,6 +367,7 @@ function stateFromSnapshot(snapshot: ConversationSnapshot, throughMessageId: str
       (message) =>
         message.author !== "user" &&
         message.itemType !== "commentary" &&
+        message.itemType !== CONVERSATION_NARRATION_ITEM_TYPE &&
         message.itemType !== CONVERSATION_PLAN_ITEM_TYPE &&
         message.itemType !== CONVERSATION_SUBAGENTS_ITEM_TYPE &&
         message.itemType !== CONVERSATION_MEMORY_CHANGES_ITEM_TYPE &&

@@ -9,6 +9,7 @@ import {
   AGENT_EXCHANGE_ITEM_TYPE,
   CONTEXT_RESET_ITEM_TYPE,
   CONVERSATION_MEMORY_CHANGES_ITEM_TYPE,
+  CONVERSATION_NARRATION_ITEM_TYPE,
   CONVERSATION_SUBAGENTS_ITEM_TYPE,
   HOSTED_SITE_EVENT_ITEM_TYPE_PREFIX,
   MARKETPLACE_SUGGESTION_ITEM_TYPE_PREFIX,
@@ -61,6 +62,7 @@ function isIncoming(message: { itemType?: string | undefined }, fromUser: boolea
   return (
     !fromUser &&
     message.itemType !== "commentary" &&
+    message.itemType !== CONVERSATION_NARRATION_ITEM_TYPE &&
     message.itemType !== "agent_attachment" &&
     !message.itemType?.startsWith(CHAT_VISUAL_ITEM_TYPE_PREFIX) &&
     message.itemType !== AGENT_EXCHANGE_ITEM_TYPE &&

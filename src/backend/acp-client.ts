@@ -18,6 +18,7 @@ import {
   type ResumeSessionResponse,
   type SessionConfigOption,
   type SessionNotification,
+  type SessionUpdate,
 } from "@agentclientprotocol/sdk";
 import { agentProviderName } from "@openbot/contracts/agent-providers";
 import { attachmentMimeTypeForName } from "@openbot/contracts/attachment-files";
@@ -36,7 +37,7 @@ import { AcpConnection, type AcpConnectionOptions } from "./acp-connection";
 import type { AcpFlavor } from "./acp-flavor";
 import { acpPlanSteps, PLAN_UPDATED_METHOD } from "./agent/plan-updates";
 import { elicitationOptions, elicitationValue, secretElicitationField } from "./agent/prompts";
-import type { AgentProvider, DiagnosticOrigin } from "./agent-client";
+import { type AgentProvider, type DiagnosticOrigin, ProviderTurnActiveError } from "./agent-client";
 import type { AgentCliInfo } from "./cli";
 import { runCauseEffect } from "./effect-boundary";
 import { IdleThreadPool } from "./idle-thread-pool";
@@ -106,6 +107,19 @@ const ACP_TURN_STALL_MS = 5 * 60_000;
 /** How long a stopped turn may take to end before OpenBot ends it itself. */
 const ACP_STOP_GRACE_MS = 10_000;
 
+/** How often OpenBot asks `session/list` whether a session with a background task has changed. */
+const ACP_BACKGROUND_POLL_MS = 2_000;
+
+/** How long OpenBot watches a session after a background task starts or the session last changes. */
+const ACP_BACKGROUND_WATCH_MS = 30 * 60_000;
+
+/**
+ * How long a turn that the agent started for a finished background task may stay unchanged, with
+ * no tool call open, before OpenBot ends it. The agent's store changes when that turn ends, but it
+ * can also stay unchanged while the model writes a long step.
+ */
+const ACP_BACKGROUND_TURN_QUIET_MS = 15_000;
+
 interface ClientEvents {
   notification: [notification: AppServerNotification];
   request: [request: AppServerRequest];
@@ -156,7 +170,14 @@ interface AcpTurn {
   abandoned: boolean;
   /** The session's total cost in USD at this turn's last `usage_update`, when the agent sends one. */
   reportedCost: number | null;
+  /** The agent started this turn for a finished background task. OpenBot replays it from `session/load`. */
+  unprompted: boolean;
+  /** The ACP `messageId` of the text in `text`. Text of another message is a message of its own. */
+  textMessageId: string | null;
 }
+
+/** The parts of a `session/load` request that open this session as it was opened. */
+type AcpSessionRestore = Omit<LoadSessionRequest, "sessionId">;
 
 interface AcpThread {
   id: string;
@@ -184,6 +205,20 @@ interface AcpThread {
   idleRelease: ReturnType<typeof setTimeout> | null;
   /** Also set when the session was loaded only for a read. */
   idleSince: number;
+  /** The `session/load` request that a background replay sends, with the session's MCP servers. */
+  restore: AcpSessionRestore;
+  /** The ACP message and tool call IDs that this session already showed (`unsentBackgroundTurns`). */
+  shownIds: Set<string>;
+  /** Until when OpenBot watches the session for turns of a background task. 0: no watch. */
+  backgroundUntil: number;
+  /** The session's `updatedAt` in the last `session/list`. */
+  backgroundUpdatedAt: string | null;
+  /** The next replay marks its new entries as shown and does not show them: the user stopped them. */
+  backgroundSkip: boolean;
+  /** A background replay that runs. A prompt waits for it, so that its updates do not mix. */
+  backgroundReplay: Deferred.Deferred<void> | null;
+  /** Prompts that are being prepared. A background replay waits until none is. */
+  turnsOpening: number;
 }
 
 /** What a closed idle session needs to be loaded again. Completed history lives in storage. */
@@ -391,8 +426,11 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     releaseAfterMs: ACP_SESSION_IDLE_RELEASE_MS,
     idleLimit: ACP_IDLE_SESSION_LIMIT,
     // An agent that cannot close a session and load it again would keep its MCP servers or lose it.
-    canRelease: () =>
-      this.#loadsSessions && Boolean(this.#initialization?.agentCapabilities?.sessionCapabilities?.close),
+    // A watched session stays open: a closed one would not report the end of its background task.
+    canRelease: (thread) =>
+      this.#loadsSessions &&
+      Boolean(this.#initialization?.agentCapabilities?.sessionCapabilities?.close) &&
+      thread.backgroundUntil === 0,
     snapshot: ({ cwd, developerInstructions, dynamicTools, workspaceRoots, computerUse }) => ({
       cwd,
       developerInstructions,
@@ -420,6 +458,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
   >();
   /** Session loads currently being consumed as history. These updates must never become live turns. */
   readonly #historyReplays = new Map<string, HistoryReplay>();
+  /** The updates of each background replay's `session/load`, by session. */
+  readonly #backgroundReplays = new Map<string, SessionUpdate[]>();
   /**
    * The session of `#privatePrompt`, kept for the process: no thread or transcript sees it, and each
    * new Antigravity session leaves a conversation database of its own on disk, also after it closes.
@@ -1010,7 +1050,12 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
           return yield* providerSync(() => decoder({}));
         turn.stopped = true;
         const cancel = providerCall(() => this.#requireConnection().cancel({ sessionId: thread.id }));
-        if (this.#flavor.cancelLocallyThenResume) {
+        if (turn.unprompted) {
+          // No prompt answers for the agent's own turn. A later replay must not show its rest.
+          thread.backgroundSkip = true;
+          yield* cancel.pipe(Effect.ignore);
+          yield* this.#completeTurn(thread, turn, "interrupted", null);
+        } else if (this.#flavor.cancelLocallyThenResume) {
           yield* cancel.pipe(Effect.ensuring(this.#abandonTurn(thread, turn, "interrupted", null)));
         } else {
           yield* cancel;
@@ -1333,6 +1378,13 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
               computerUse,
               idleRelease: null,
               idleSince: 0,
+              restore: { cwd, ...directories, mcpServers },
+              shownIds: new Set(),
+              backgroundUntil: 0,
+              backgroundUpdatedAt: null,
+              backgroundSkip: false,
+              backgroundReplay: null,
+              turnsOpening: 0,
             };
             threadRef = thread;
             providerResult(
@@ -1701,7 +1753,25 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       );
       thread = yield* providerSync(() => this.#requireThread(threadId));
     }
-    if (thread.activeTurn) return yield* providerFailure(new Error("The ACP thread already has an active turn."));
+    const opening = thread;
+    opening.turnsOpening += 1;
+    return yield* this.#promptTurn(opening, params).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          opening.turnsOpening -= 1;
+        }),
+      ),
+    );
+  });
+
+  readonly #promptTurn = Effect.fn("AcpAgentClient.promptTurn")(function* (
+    this: AcpAgentClient,
+    thread: AcpThread,
+    params: unknown,
+  ): Effect.fn.Return<{ turn: { id: string; status: string }; turnId?: string }, ProviderClientOperationError> {
+    // A background replay that runs can start a turn of the agent. The prompt then waits for it.
+    if (thread.backgroundReplay) yield* Deferred.await(thread.backgroundReplay);
+    if (thread.activeTurn) return yield* providerFailure(this.#turnActiveError(thread.activeTurn));
     yield* this.#configuration.applyConfig(
       thread,
       getString(params, "model"),
@@ -1743,6 +1813,29 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       thread.instructionsSent = thread.developerInstructions;
       thread.promptsSinceInstructions = 1;
     }
+    const turn = this.#beginTurn(thread, turnId, {
+      unprompted: false,
+      answerOptional: isRecord(params) && params.answerOptional === true,
+    });
+    turn.task = yield* Effect.forkIn(this.#consumePrompt(thread, turn, blocks), this.#scope, {
+      startImmediately: true,
+    });
+    if (!this.#flavor.promptOpenForBackgroundTasks) yield* Effect.forkIn(this.#watchStall(thread, turn), this.#scope);
+    return { turn: { id: turn.id, status: "inProgress" } };
+  });
+
+  /** A turn of the agent's own ends when OpenBot sees it end, so a message waits for it rather than joining it. */
+  #turnActiveError(turn: AcpTurn): Error {
+    return turn.unprompted
+      ? new ProviderTurnActiveError(this.#label)
+      : new Error("The ACP thread already has an active turn.");
+  }
+
+  #beginTurn(
+    thread: AcpThread,
+    turnId: string,
+    { unprompted, answerOptional }: { unprompted: boolean; answerOptional: boolean },
+  ): AcpTurn {
     const currentSecond = Date.now() / 1_000;
     const startedAt = Math.max(currentSecond, this.#lastTurnStartedAt + 0.001);
     this.#lastTurnStartedAt = startedAt;
@@ -1760,7 +1853,7 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       interruptedAnswer: null,
       providerError: null,
       sdkFailureAt: null,
-      answerOptional: isRecord(params) && params.answerOptional === true,
+      answerOptional,
       messages: [],
       toolNames: new Map(),
       toolKinds: new Map(),
@@ -1772,19 +1865,22 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       waitingOnUser: 0,
       abandoned: false,
       reportedCost: null,
+      unprompted,
+      textMessageId: null,
     };
     thread.activeTurn = turn;
     this.#threads.holdForTurn(thread);
     this.emit("notification", {
       method: "turn/started",
-      params: { threadId: thread.id, turn: { id: turn.id, status: "inProgress" } },
+      params: {
+        threadId: thread.id,
+        turn: { id: turn.id, status: "inProgress" },
+        // `unprompted` tells the lifecycle that no delivery started this turn.
+        ...(unprompted ? { unprompted } : {}),
+      },
     });
-    turn.task = yield* Effect.forkIn(this.#consumePrompt(thread, turn, blocks), this.#scope, {
-      startImmediately: true,
-    });
-    if (!this.#flavor.promptOpenForBackgroundTasks) yield* Effect.forkIn(this.#watchStall(thread, turn), this.#scope);
-    return { turn: { id: turn.id, status: "inProgress" } };
-  });
+    return turn;
+  }
 
   /** Refuses a prompt whose endpoint was taken out while this turn was prepared. */
   #requireServedModel(thread: AcpThread): void {
@@ -1867,6 +1963,11 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       this.#historyUpdate(replay, notification);
       return;
     }
+    const background = this.#backgroundReplays.get(notification.sessionId);
+    if (background) {
+      background.push(notification.update);
+      return;
+    }
     const thread = this.#threads.get(notification.sessionId);
     if (!thread) return;
     if (thread.activeTurn) thread.activeTurn.lastActivityAt = Date.now();
@@ -1903,6 +2004,15 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     }
     const turn = thread.activeTurn;
     if (!turn || turn.completing) return;
+    this.#applyTurnUpdate(thread, turn, update);
+  }
+
+  /** Applies one output update of the agent to a turn: a live one, or one that a background replay found. */
+  #applyTurnUpdate(thread: AcpThread, turn: AcpTurn, update: SessionUpdate): void {
+    if (this.#flavor.unsentBackgroundTurns) {
+      const id = shownEntryId(update);
+      if (id) thread.shownIds.add(id);
+    }
     if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
       // The agent's own transport error sent as answer text (Cursor, #3334).
       if (this.#flavor.noiseChunk?.test(update.content.text)) return;
@@ -1927,6 +2037,12 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
         return;
       }
       if (update.content.text) this.#completeThought(thread, turn);
+      // Each ACP message is a message of its own. Text that an agent writes in one step and then in
+      // the next one with no tool call between was joined into one line.
+      const messageId = contentMessageId(update);
+      if (messageId && turn.textMessageId && messageId !== turn.textMessageId)
+        this.#completeMessage(thread, turn, "narration");
+      if (messageId) turn.textMessageId = messageId;
       if (update.content.text.trim()) {
         turn.receivedOutput = true;
         turn.interruptedAnswer = null;
@@ -1960,9 +2076,10 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") {
       turn.receivedOutput = true;
       // A tool call ends the step, so thinking after it is a new thought, not text added to the old one.
+      // The text before it is a message to the user, such as "I will look at the logs" (#3406).
       if (update.sessionUpdate === "tool_call") {
         this.#completeThought(thread, turn);
-        this.#completeMessage(thread, turn, "commentary");
+        this.#completeMessage(thread, turn, "narration");
       }
       // ACP updates are partial; OpenCode omits the name when a tool finishes.
       const name = update.name ?? update.title ?? turn.toolNames.get(update.toolCallId) ?? "tool";
@@ -1994,6 +2111,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
         turn.messages.push(item);
         turn.toolItems.delete(update.toolCallId);
       }
+      if (this.#flavor.unsentBackgroundTurns && update.status === "completed" && startsBackgroundTask(update.rawOutput))
+        this.#watchBackground(thread);
       return;
     }
     if (update.sessionUpdate === "plan") {
@@ -2006,7 +2125,7 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
 
   // ACP cannot identify final text while streaming. A later step boundary assigns its phase.
   // Antigravity also publishes provisional answer text because its prompt can wait on background work.
-  #completeMessage(thread: AcpThread, turn: AcpTurn, phase: "commentary" | "final_answer"): void {
+  #completeMessage(thread: AcpThread, turn: AcpTurn, phase: "commentary" | "narration" | "final_answer"): void {
     if (phase === "final_answer") {
       if (!turn.text.trim() && turn.interruptedAnswer) turn.text = turn.interruptedAnswer;
       turn.interruptedAnswer = null;
@@ -2016,6 +2135,7 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     turn.messages.push(item);
     this.emit("notification", { method: "item/completed", params: { threadId: thread.id, turnId: turn.id, item } });
     turn.text = "";
+    turn.textMessageId = null;
     turn.itemId = `${turn.id}:assistant:${turn.messages.length}`;
   }
 
@@ -2101,6 +2221,135 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       );
     }
   });
+
+  /** Watches a session whose background task can start a turn that the agent sends no update for. */
+  #watchBackground(thread: AcpThread): void {
+    if (!this.#loadsSessions) return;
+    const watching = thread.backgroundUntil > 0;
+    thread.backgroundUntil = Date.now() + ACP_BACKGROUND_WATCH_MS;
+    if (watching) return;
+    this.#threads.holdForTurn(thread);
+    Effect.runFork(this.#watchBackgroundTurns(thread).pipe(Effect.forkIn(this.#scope)));
+  }
+
+  /**
+   * Shows the turns that the agent starts for a finished background task (`unsentBackgroundTurns`).
+   * The session's `updatedAt` in `session/list` changes when such a turn starts and when it ends.
+   * A `session/load` then replays the session, and its entries after the last one that the chat
+   * showed go through the live update path, in a turn that OpenBot ends when the session is quiet.
+   */
+  readonly #watchBackgroundTurns = Effect.fn("AcpAgentClient.watchBackgroundTurns")(function* (
+    this: AcpAgentClient,
+    thread: AcpThread,
+  ) {
+    const stallLimit = this.options.turnStallMs ?? ACP_TURN_STALL_MS;
+    while (this.#threads.get(thread.id) === thread && Date.now() < thread.backgroundUntil) {
+      yield* Effect.sleep(ACP_BACKGROUND_POLL_MS);
+      const active = thread.activeTurn;
+      // A prompt's own updates show its turn. The replay after it finds nothing new.
+      if ((active && !active.unprompted) || thread.turnsOpening > 0) continue;
+      const updatedAt = yield* this.#sessionUpdatedAt(thread).pipe(Effect.orElseSucceed(() => null));
+      if (updatedAt !== null && updatedAt !== thread.backgroundUpdatedAt) {
+        const replayed = yield* this.#replayBackground(thread).pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => {
+              this.emit("diagnostic", this.#redact(`ACP background replay failed: ${failureText(error)}`));
+              return true;
+            }),
+          ),
+        );
+        // A prompt that started during `session/list` shows its own turn; the change waits for the next poll.
+        if (replayed) {
+          thread.backgroundUpdatedAt = updatedAt;
+          thread.backgroundUntil = Math.max(thread.backgroundUntil, Date.now() + ACP_BACKGROUND_WATCH_MS);
+        }
+      }
+      const turn = thread.activeTurn;
+      if (!turn?.unprompted || turn.completing || turn.waitingOnUser > 0) continue;
+      const limit = turn.toolItems.size > 0 ? stallLimit : ACP_BACKGROUND_TURN_QUIET_MS;
+      if (Date.now() - turn.lastActivityAt >= limit) yield* this.#completeTurn(thread, turn, "completed", null);
+    }
+    thread.backgroundUntil = 0;
+    thread.backgroundUpdatedAt = null;
+    if (this.#threads.get(thread.id) === thread && !thread.activeTurn) yield* this.#threads.markIdle(thread);
+  });
+
+  /** The session's `updatedAt` on the first `session/list` page, which lists the latest first. */
+  readonly #sessionUpdatedAt = Effect.fn("AcpAgentClient.sessionUpdatedAt")(function* (
+    this: AcpAgentClient,
+    thread: AcpThread,
+  ) {
+    const connection = yield* providerSync(() => this.#requireConnection());
+    const response = yield* providerCall(() => connection.listSessions({ cwd: thread.cwd }));
+    return response.sessions.find((session) => session.sessionId === thread.id)?.updatedAt ?? null;
+  });
+
+  /**
+   * Loads the session again and shows what its background task added. A prompt waits meanwhile.
+   * False when a prompt started first: its live updates must not go into the replay.
+   */
+  readonly #replayBackground = Effect.fn("AcpAgentClient.replayBackground")(function* (
+    this: AcpAgentClient,
+    thread: AcpThread,
+  ) {
+    if (thread.turnsOpening > 0 || (thread.activeTurn && !thread.activeTurn.unprompted)) return false;
+    const done = Deferred.makeUnsafe<void>();
+    const updates: SessionUpdate[] = [];
+    thread.backgroundReplay = done;
+    this.#backgroundReplays.set(thread.id, updates);
+    yield* Effect.gen({ self: this }, function* () {
+      const connection = yield* providerSync(() => this.#requireConnection());
+      yield* providerCall(() => connection.loadSession({ sessionId: thread.id, ...thread.restore }));
+      this.#backgroundReplays.delete(thread.id);
+      this.#applyBackgroundEntries(thread, updates);
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          this.#backgroundReplays.delete(thread.id);
+          thread.backgroundReplay = null;
+          Deferred.doneUnsafe(done, Exit.void);
+        }),
+      ),
+    );
+    return true;
+  });
+
+  /**
+   * Applies the replayed entries after the last one that the chat showed, and the updates of the
+   * tool calls that are still open. The replay lists each message and tool call by its ID.
+   */
+  #applyBackgroundEntries(thread: AcpThread, updates: SessionUpdate[]): void {
+    const ids = updates.map(shownEntryId);
+    const lastShown = ids.findLastIndex((id) => id !== null && thread.shownIds.has(id));
+    // Without a shown entry, OpenBot cannot tell which part of the session is new.
+    if (lastShown < 0) return;
+    const fresh = new Set(ids.slice(lastShown + 1).filter((id) => id !== null && !thread.shownIds.has(id)));
+    if (thread.backgroundSkip) {
+      // The rest of a stopped turn can reach the store a little later, so the skip waits for it.
+      if (fresh.size === 0) return;
+      thread.backgroundSkip = false;
+      for (const id of fresh) if (id) thread.shownIds.add(id);
+      return;
+    }
+    const open = thread.activeTurn?.unprompted ? thread.activeTurn : null;
+    // The text that the turn shows last can still grow, while no tool call or other message ends it.
+    const growing = open?.textMessageId ?? null;
+    const grown = growing ? replayedText(updates, growing) : "";
+    const added = open && grown.startsWith(open.text) ? grown.slice(open.text.length) : "";
+    if (fresh.size === 0 && !open?.toolItems.size && !added) return;
+    const turn = open ?? this.#beginTurn(thread, randomUUID(), { unprompted: true, answerOptional: true });
+    if (growing && added)
+      this.#applyTurnUpdate(thread, turn, {
+        sessionUpdate: "agent_message_chunk",
+        messageId: growing,
+        content: { type: "text", text: added },
+      });
+    for (const [index, update] of updates.entries()) {
+      const id = ids[index];
+      if (id && (fresh.has(id) || turn.toolItems.has(id))) this.#applyTurnUpdate(thread, turn, update);
+    }
+    turn.lastActivityAt = Date.now();
+  }
 
   /** Runs a request that waits for the user. The turn does not count as stalled meanwhile. */
   #waitForUser<A, E>(turn: AcpTurn | null | undefined, request: Effect.Effect<A, E>): Effect.Effect<A, E> {
@@ -2408,6 +2657,37 @@ class MissingAcpSessionError extends Error {
 function contentMessageId(update: SessionNotification["update"]): string | null {
   if (!("messageId" in update) || typeof update.messageId !== "string" || update.messageId.length === 0) return null;
   return update.messageId;
+}
+
+/**
+ * The ID of the message or tool call that an output update belongs to. A `session/load` repeats it.
+ * A message with no text yet has none: OpenCode 2.2.0 stores the message when it starts and its text
+ * when the step ends, so a replay between the two shows it empty.
+ */
+function shownEntryId(update: SessionUpdate): string | null {
+  if (update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update") return update.toolCallId;
+  if (update.sessionUpdate === "agent_message_chunk" || update.sessionUpdate === "agent_thought_chunk")
+    return update.content.type === "text" && update.content.text ? contentMessageId(update) : null;
+  return null;
+}
+
+/** The whole text of one message in a replay. */
+function replayedText(updates: readonly SessionUpdate[], messageId: string): string {
+  return updates
+    .map((update) =>
+      update.sessionUpdate === "agent_message_chunk" &&
+      update.content.type === "text" &&
+      contentMessageId(update) === messageId
+        ? update.content.text
+        : "",
+    )
+    .join("");
+}
+
+/** A tool call that ended and left a background task running (OpenCode 2.2.0 `subagent`). */
+function startsBackgroundTask(rawOutput: unknown): boolean {
+  const metadata = getRecord(rawOutput, "metadata");
+  return metadata?.status === "running" && isString(metadata.sessionID);
 }
 
 /** A missing session, identified by the agent's flavor or by the protocol's `-32002` error. */

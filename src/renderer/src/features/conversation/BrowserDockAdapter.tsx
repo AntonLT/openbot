@@ -7,6 +7,7 @@ import {
   type BrowserDockPresentation,
   type BrowserDockSkill,
   type BrowserTab,
+  CONVERSATION_NARRATION_ITEM_TYPE,
   isBrowserDockIsland,
 } from "@openbot/contracts/ipc";
 import { BROWSER_USER_CONTROL_CAPABILITY } from "@openbot/contracts/team-protocol/browser-user-control-v1";
@@ -121,7 +122,12 @@ export function BrowserDockAdapter(adapterProps: { tab: BrowserTab | undefined; 
       const message = messages[index];
       if (!message || message.id === marker) return undefined;
       if (message.author !== "agent") return undefined;
-      if (message.streaming || message.itemType === "commentary") continue;
+      if (
+        message.streaming ||
+        message.itemType === "commentary" ||
+        message.itemType === CONVERSATION_NARRATION_ITEM_TYPE
+      )
+        continue;
       if ((message.kind ?? "text") !== "text" || !message.body.trim()) continue;
       return dismissedReplies().has(message.id) ? undefined : message;
     }

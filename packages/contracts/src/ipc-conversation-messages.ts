@@ -304,8 +304,15 @@ function isConversationDelivery(value: unknown): boolean {
 export const ROUTINE_QUIET_ANSWER_ITEM_TYPE = "routine_quiet_answer";
 
 /**
+ * The item type of the text that an agent writes before a tool call in the same turn, such as "I will
+ * read the logs first". The chat shows it as a message, but it is not the turn's answer: it does not
+ * count as unread, change the preview, or go to a channel or a messaging app as the reply.
+ */
+export const CONVERSATION_NARRATION_ITEM_TYPE = "narration";
+
+/**
  * The answer an agent gave in one turn: its last message of that turn that says something to the
- * reader. Commentary, a question prompt, a plan, the subagents and a quiet routine answer are not the answer.
+ * reader. Commentary, narration, a question prompt, a plan, the subagents and a quiet routine answer are not the answer.
  */
 export function latestTurnAnswer(
   messages: readonly ConversationMessage[],
@@ -318,6 +325,7 @@ export function latestTurnAnswer(
         message.author === "assistant" &&
         message.turnId === turnId &&
         message.itemType !== "commentary" &&
+        message.itemType !== CONVERSATION_NARRATION_ITEM_TYPE &&
         message.itemType !== "question_prompt" &&
         message.itemType !== CONVERSATION_PLAN_ITEM_TYPE &&
         message.itemType !== CONVERSATION_SUBAGENTS_ITEM_TYPE &&

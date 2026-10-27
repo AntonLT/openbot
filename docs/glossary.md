@@ -37,6 +37,10 @@ table, IPC channel or product string, or when a term in the code disagrees with 
   new conversation and asks its teammates. A **messaging thread** is one external conversation (a Slack thread) that one agent
   answers in its own execution thread (`projection_messaging_threads`, `MessagingLink`). A Slack
   channel is a `platformChannelId`, never a **channel**.
+- **narration**: the text an agent writes before a tool call in the same turn, such as "I will read
+  the logs first" (`CONVERSATION_NARRATION_ITEM_TYPE`, item phase `narration`). The chat shows it as
+  a message, but it is not the turn's **answer** (`latestTurnAnswer`). It is not **commentary**, the
+  item type of thinking, which the chat folds into the turn's steps.
 - **server**: a joined team server (`ServerSummary`, `servers:*`), the local Team API host
   (`HostStatus`, `host:*`, `src/main/team-api-server.ts`), the account API (`apps/auth-api`,
   `auth:*`), or an MCP server (`createSdkMcpServer`).

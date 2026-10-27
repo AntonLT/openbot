@@ -15,6 +15,7 @@ import {
   type ChannelMessage,
   type ChannelRoutingConversationEventAction,
   type ChannelTask,
+  CONVERSATION_NARRATION_ITEM_TYPE,
   type ConversationSnapshot,
   type CreateChannelMemoryInput,
   channelRoutingConversationEventItemType,
@@ -1918,6 +1919,9 @@ export class ChannelService {
       const result = existing(`channel-result-${assignment.id}-revision-${assignment.taskRevision}`);
       if (result?.message.text === message.text) continue;
       const original = existing(message.id);
+      // A member's notes between tool calls fold into its steps in a channel, as they did before the
+      // chat showed them, so a `channels-v1` client sees no new reply.
+      if (message.itemType === CONVERSATION_NARRATION_ITEM_TYPE) message = { ...message, itemType: "commentary" };
       // The result is the answer of the turn. Answer text that the running turn writes after it, such
       // as a "Yes.", folds into its steps. Before, it showed as a second reply from the same member.
       // Text from before the result has a row with a lower sequence and stays as it is, and so do the

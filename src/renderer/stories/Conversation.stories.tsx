@@ -1749,6 +1749,62 @@ export const ThinkingSettled: Story = {
   },
 };
 
+/** A turn whose agent says what it will do, works, and then reports. Its steps sit between the two. */
+const narrationTurn: RendererAgentMessage[] = [
+  {
+    id: "narration-ask",
+    author: "you",
+    body: "Check the release notes for broken links.",
+    time: "10:00",
+    kind: "text",
+    turnId: "turn-narration",
+    createdAt: "2026-08-19T10:00:00.000Z",
+  },
+  {
+    id: "narration-thinking",
+    author: "agent",
+    body: "",
+    time: "10:00",
+    kind: "thinking",
+    turnId: "turn-narration",
+    items: ["Find the release notes", "Open each link", "Collect the broken ones"],
+    itemIds: ["narration-thought-1", "narration-thought-2", "narration-thought-3"],
+    itemCreatedAt: ["2026-08-19T10:00:01.000Z", "2026-08-19T10:00:05.000Z", "2026-08-19T10:00:30.000Z"],
+  },
+  {
+    id: "narration-note",
+    author: "agent",
+    body: "Understood. I will open each link in the release notes now.",
+    time: "10:00",
+    kind: "text",
+    itemType: "narration",
+    turnId: "turn-narration",
+    createdAt: "2026-08-19T10:00:02.000Z",
+  },
+  {
+    id: "narration-answer",
+    author: "agent",
+    body: "Two links are broken: the migration guide and the old pricing page.",
+    time: "10:01",
+    kind: "text",
+    turnId: "turn-narration",
+    createdAt: "2026-08-19T10:01:00.000Z",
+  },
+];
+
+export const NarrationBetweenSteps: Story = {
+  name: "Narration between steps",
+  args: { messages: [...messages, ...narrationTurn] },
+};
+
+export const NarrationWhileWorking: Story = {
+  name: "Narration while working",
+  args: {
+    activeTurnId: "turn-narration",
+    messages: [...messages, ...narrationTurn.slice(0, 3)],
+  },
+};
+
 export const Prompt: Story = {
   args: { prompt },
 };

@@ -1,3 +1,4 @@
+import { CONVERSATION_NARRATION_ITEM_TYPE } from "@openbot/contracts/ipc";
 import { type DynamicRecord, isNumber, isString } from "@openbot/contracts/runtime-values";
 import { redactText } from "@openbot/logging";
 import { Effect } from "effect";
@@ -69,7 +70,8 @@ function renderStep(item: DynamicRecord): string | null {
       // Progress notes between tool calls. Claude's and the ACP agents' thinking come back with the
       // same phase; their ids mark them, and reasoning stays with the provider that produced it.
       const id = getString(item, "id") ?? "";
-      if (getString(item, "phase") !== "commentary" || REASONING_ID.test(id)) return null;
+      const phase = getString(item, "phase");
+      if ((phase !== "commentary" && phase !== CONVERSATION_NARRATION_ITEM_TYPE) || REASONING_ID.test(id)) return null;
       const text = field(item, "text")?.trim();
       return text ? `note: ${clip(text, STEP_LIMIT)}` : null;
     }
