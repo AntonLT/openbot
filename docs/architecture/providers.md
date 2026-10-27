@@ -369,7 +369,8 @@ background subagent ends, OpenCode answers its result in a turn of its own (a `s
   The idle pool does not close a watched session, because a closed one never reports the result.
 - Every 2 seconds, when no prompt runs or opens, OpenBot reads `session/list`. When the session's
   `updatedAt` changes, it sends `session/load` with the session's own MCP servers, and collects the
-  replay apart from live updates. A prompt waits for that load, which has the request time limit.
+  replay apart from live updates until the load answers, also after the request time limit. A
+  prompt waits for the load meanwhile. A failed load is tried again at the next poll.
 - The client keeps the ACP `messageId` of each message with text and the ID of each tool call that
   the chat showed. The replay's entries after the last shown one, the updates of the tool calls
   that are still open, and the added text of the message that the turn shows last go through the

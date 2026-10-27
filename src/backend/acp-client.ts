@@ -2265,7 +2265,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
           Effect.catch((error) =>
             Effect.sync(() => {
               this.emit("diagnostic", this.#redact(`ACP background replay failed: ${failureText(error)}`));
-              return true;
+              // The next poll tries the same change again: it can be the end of the turn.
+              return false;
             }),
           ),
         );
@@ -2305,25 +2306,35 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     this: AcpAgentClient,
     thread: AcpThread,
   ) {
-    if (this.#openingTurns.has(thread.id) || (thread.activeTurn && !thread.activeTurn.unprompted)) return false;
+    if (
+      thread.backgroundReplay ||
+      this.#openingTurns.has(thread.id) ||
+      (thread.activeTurn && !thread.activeTurn.unprompted)
+    )
+      return false;
     const done = Deferred.makeUnsafe<void>();
     const updates: SessionUpdate[] = [];
     thread.backgroundReplay = done;
     this.#backgroundReplays.set(thread.id, updates);
+    // The agent goes on with its replay after a timeout, so the session's updates stay apart, and a
+    // prompt waits, until the load answers. The prompt's own `turn/start` time limit still applies.
+    const release = () => {
+      if (this.#backgroundReplays.get(thread.id) === updates) this.#backgroundReplays.delete(thread.id);
+      if (thread.backgroundReplay === done) thread.backgroundReplay = null;
+      Deferred.doneUnsafe(done, Exit.void);
+    };
+    let load: Promise<unknown> | null = null;
     yield* Effect.gen({ self: this }, function* () {
       const connection = yield* providerSync(() => this.#requireConnection());
-      // A prompt waits for this load, so it has the same time limit as a request.
-      yield* providerCall(() => connection.loadSession({ sessionId: thread.id, ...thread.restore })).pipe(
-        this.#backgroundTimeout("session/load"),
-      );
-      this.#backgroundReplays.delete(thread.id);
+      const started = Promise.resolve().then(() => connection.loadSession({ sessionId: thread.id, ...thread.restore }));
+      load = started;
+      started.then(release, release);
+      yield* providerCall(() => started).pipe(this.#backgroundTimeout("session/load"));
       this.#applyBackgroundEntries(thread, updates);
     }).pipe(
       Effect.ensuring(
         Effect.sync(() => {
-          this.#backgroundReplays.delete(thread.id);
-          thread.backgroundReplay = null;
-          Deferred.doneUnsafe(done, Exit.void);
+          if (!load) release();
         }),
       ),
     );
