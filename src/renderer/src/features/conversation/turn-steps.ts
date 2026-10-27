@@ -10,8 +10,8 @@ const NO_STEPS: AgentStep[] = [];
 
 /**
  * Where an answer of a turn stands among the turn's steps. The steps after the previous answer, up
- * to this one, show above it. The last answer of a finished turn also takes the later steps, the
- * memory changes and the trace.
+ * to this one, show above it. The last answer of a finished turn also takes the later steps and the
+ * memory changes.
  */
 interface AnswerSegment {
   turnId: string;
@@ -314,18 +314,20 @@ export function createTurnSteps(deps: {
   }
 
   /**
-   * The answers that have steps above them. The last answer of the running turn has none yet: its
-   * steps show on the activity line. Answers with no time cannot be placed, so only the last one of
-   * such a turn takes the steps.
+   * The answers that have steps above them. The steps of a running turn after its latest answer show
+   * on the activity line. Answers with no time cannot be placed, so only the last one of such a
+   * finished turn takes the steps.
    */
   const answerSegments = createMemo(() => {
     const active = deps.activeTurnId();
     const segments = new Map<string, AnswerSegment>();
     for (const [turnId, list] of sources().answers) {
+      const running = turnId === active;
       const timed = list.every(({ at }) => Number.isFinite(at));
+      if (running && !timed) continue;
       for (const [index, answer] of list.entries()) {
-        const last = index === list.length - 1;
-        if ((last && turnId === active) || (!last && !timed)) continue;
+        const last = index === list.length - 1 && !running;
+        if (!last && !timed) continue;
         segments.set(answer.id, {
           turnId,
           after: index === 0 || !timed ? Number.NEGATIVE_INFINITY : (list[index - 1]?.at ?? Number.NEGATIVE_INFINITY),
@@ -337,16 +339,31 @@ export function createTurnSteps(deps: {
     return segments;
   });
 
-  /** The turn of an answer whose steps row holds the whole turn: its facts and its trace. */
+  /**
+   * The answer of each finished turn whose steps row holds the whole turn, its facts and its trace:
+   * the last one that has steps above it.
+   */
+  const traceHolders = createMemo(() => {
+    const active = deps.activeTurnId();
+    const holders = new Map<string, string>();
+    for (const [messageId, segment] of answerSegments()) {
+      if (segment.turnId === active) continue;
+      const steps = stepsOf(segment.turnId, { key: messageId, ...segment });
+      if (steps.length > 0 || !holders.has(segment.turnId)) holders.set(segment.turnId, messageId);
+    }
+    return holders;
+  });
+
+  /** The turn of an answer whose steps row holds the whole turn. */
   const lastAnswerTurn = (messageId: string | undefined): string | undefined => {
     const segment = messageId === undefined ? undefined : answerSegments().get(messageId);
-    return segment?.last ? segment.turnId : undefined;
+    return segment && traceHolders().get(segment.turnId) === messageId ? segment.turnId : undefined;
   };
 
   return {
     /**
-     * The steps of the running turn after its latest answer, for the activity line under it. None
-     * while that answer streams, and the steps then show above the answer when the turn ends.
+     * The steps of the running turn after its latest answer, for the activity line under it. The
+     * steps before each answer show above it.
      */
     activeSteps: createMemo(() => {
       const turnId = deps.activeTurnId();
@@ -378,7 +395,7 @@ export function createTurnSteps(deps: {
       const steps = stepsOf(segment.turnId, { key: messageId, ...segment });
       return steps.length > 0 ? steps : undefined;
     },
-    /** Whether the steps row above an answer opens the trace of the whole turn: only the last one does. */
+    /** Whether the steps row above an answer opens the trace of the whole turn: one row of each turn does. */
     tracedAbove(messageId: string | undefined): boolean {
       return lastAnswerTurn(messageId) !== undefined;
     },

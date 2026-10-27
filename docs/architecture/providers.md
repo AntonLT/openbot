@@ -367,17 +367,21 @@ background subagent ends, OpenCode answers its result in a turn of its own (a `s
 - A tool call that ends with `rawOutput.metadata.status` "running" and a `sessionID` started a
   background task. OpenBot then watches the session for 30 minutes, and longer while it changes.
   The idle pool does not close a watched session, because a closed one never reports the result.
-- Every 2 seconds, when no prompt runs, OpenBot reads `session/list`. When the session's
+- Every 2 seconds, when no prompt runs or opens, OpenBot reads `session/list`. When the session's
   `updatedAt` changes, it sends `session/load` with the session's own MCP servers, and collects the
-  replay apart from live updates. A prompt waits for that load.
-- The client keeps the ACP `messageId` of each message and the ID of each tool call that the chat
-  showed. The replay's entries after the last shown one, and the updates of the tool calls that are
-  still open, go through the live update path in a turn with `unprompted: true`. As for Claude
+  replay apart from live updates. A prompt waits for that load, which has the request time limit.
+- The client keeps the ACP `messageId` of each message with text and the ID of each tool call that
+  the chat showed. The replay's entries after the last shown one, the updates of the tool calls
+  that are still open, and the added text of the message that the turn shows last go through the
+  live update path in a turn with `unprompted: true`. OpenCode stores a message when it starts and
+  its text when the step ends, so a replay can find it empty first. As for Claude
   (#1904), no delivery attaches to that turn, and a message sent meanwhile fails with
   `ProviderTurnActiveError` and waits in the queue.
 - OpenBot ends that turn when the session sends nothing new for 15 seconds and no tool call is open,
   or after the stall limit while one is. A step that writes for longer can split one turn in two;
-  nothing is lost. A stop cancels the turn, and the next replay marks the rest of it as shown.
+  nothing is lost. A stop cancels the turn and marks its open tool calls as stopped. For 30 seconds
+  after any turn that does not complete, a replay marks new entries as shown and does not show
+  them, because OpenCode can go on with a stopped turn (#2858).
 
 The watch is in memory. A background task that ends while OpenBot is closed, or after OpenBot
 loaded the session again, shows only in OpenCode's own store.
@@ -385,13 +389,15 @@ loaded the session again, shows only in OpenCode's own store.
 #### Narration
 
 Text that an ACP agent writes before a tool call in the same turn is an `agentMessage` item with
-phase `narration` (`CONVERSATION_NARRATION_ITEM_TYPE`), not `commentary`. A text of another ACP
-`messageId` also ends the text before it as narration, so two steps' texts are not joined into one
-line. The desktop chat shows narration as a message, and the steps of the turn between its messages:
+phase `narration` (`CONVERSATION_NARRATION_ITEM_TYPE`), not `commentary`. For OpenCode
+(`messagePerId`), a text of another ACP `messageId` also ends the text before it as narration, so
+two steps' texts are not joined into one line. The desktop chat shows narration as a message, and the steps of the turn between its messages:
 the steps before each message stand above it, and the last message holds the rest, the memory
-changes and the trace. Narration is not the turn's answer (`latestTurnAnswer`): it does not count as
-unread, set the preview, go to a messaging app, or show as a channel reply, where it folds into
-the steps as commentary. Claude, Codex and Pi still send such text as commentary. Rows stored before
+changes. The trace and the turn's facts sit on the last message that has steps above it. While the
+turn runs, its steps after the latest message show on the activity line. Narration is not the
+turn's answer (`latestTurnAnswer`): it does not count as unread, set the preview, show in the
+dynamic island, go to a messaging app, or show as a channel reply, where it folds into the steps as
+commentary. The jump-to-latest count does count it, because the reader sees it as a new message. Claude, Codex and Pi still send such text as commentary. Rows stored before
 this change keep `commentary`.
 
 Provider session IDs remain in `projection_provider_sessions`; migration 17 adds OpenCode while

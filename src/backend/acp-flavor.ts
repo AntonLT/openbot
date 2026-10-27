@@ -68,6 +68,8 @@ export interface AcpFlavor {
    * with `rawOutput.metadata.status` "running" and the task's `sessionID`.
    */
   unsentBackgroundTurns?: true;
+  /** Each answer message has its own `messageId`, so text of a new ID is a new message, not more text. */
+  messagePerId?: true;
   /**
    * The agent keeps one MCP server of each name for a directory, and a session that opens there
    * replaces the server that the others in it use. Their OpenBot servers then share one token.

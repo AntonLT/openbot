@@ -120,6 +120,12 @@ const ACP_BACKGROUND_WATCH_MS = 30 * 60_000;
  */
 const ACP_BACKGROUND_TURN_QUIET_MS = 15_000;
 
+/**
+ * How long the agent's store can still get the rest of a turn that did not complete, such as one
+ * that OpenCode went on with after a stop (#2858). A background replay does not show that rest.
+ */
+const ACP_STOPPED_OUTPUT_MS = 30_000;
+
 interface ClientEvents {
   notification: [notification: AppServerNotification];
   request: [request: AppServerRequest];
@@ -213,12 +219,10 @@ interface AcpThread {
   backgroundUntil: number;
   /** The session's `updatedAt` in the last `session/list`. */
   backgroundUpdatedAt: string | null;
-  /** The next replay marks its new entries as shown and does not show them: the user stopped them. */
-  backgroundSkip: boolean;
+  /** Until when a replay marks new entries as shown and does not show them: the rest of a stopped turn. */
+  backgroundSkipUntil: number;
   /** A background replay that runs. A prompt waits for it, so that its updates do not mix. */
   backgroundReplay: Deferred.Deferred<void> | null;
-  /** Prompts that are being prepared. A background replay waits until none is. */
-  turnsOpening: number;
 }
 
 /** What a closed idle session needs to be loaded again. Completed history lives in storage. */
@@ -460,6 +464,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
   readonly #historyReplays = new Map<string, HistoryReplay>();
   /** The updates of each background replay's `session/load`, by session. */
   readonly #backgroundReplays = new Map<string, SessionUpdate[]>();
+  /** Prompts that are being prepared, by session. A background replay waits until none is. */
+  readonly #openingTurns = new Map<string, number>();
   /**
    * The session of `#privatePrompt`, kept for the process: no thread or transcript sees it, and each
    * new Antigravity session leaves a conversation database of its own on disk, also after it closes.
@@ -1051,8 +1057,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
         turn.stopped = true;
         const cancel = providerCall(() => this.#requireConnection().cancel({ sessionId: thread.id }));
         if (turn.unprompted) {
-          // No prompt answers for the agent's own turn. A later replay must not show its rest.
-          thread.backgroundSkip = true;
+          // No prompt answers for the agent's own turn, so its open tool calls end as stopped.
+          turn.abandoned = true;
           yield* cancel.pipe(Effect.ignore);
           yield* this.#completeTurn(thread, turn, "interrupted", null);
         } else if (this.#flavor.cancelLocallyThenResume) {
@@ -1382,9 +1388,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
               shownIds: new Set(),
               backgroundUntil: 0,
               backgroundUpdatedAt: null,
-              backgroundSkip: false,
+              backgroundSkipUntil: 0,
               backgroundReplay: null,
-              turnsOpening: 0,
             };
             threadRef = thread;
             providerResult(
@@ -1736,6 +1741,24 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     threadId: string,
     params: unknown,
   ): Effect.fn.Return<{ turn: { id: string; status: string }; turnId?: string }, ProviderClientOperationError> {
+    // Counted before the session opens again, because that sends its own `session/load`.
+    this.#openingTurns.set(threadId, (this.#openingTurns.get(threadId) ?? 0) + 1);
+    return yield* this.#prepareTurn(threadId, params).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          const count = (this.#openingTurns.get(threadId) ?? 1) - 1;
+          if (count > 0) this.#openingTurns.set(threadId, count);
+          else this.#openingTurns.delete(threadId);
+        }),
+      ),
+    );
+  });
+
+  readonly #prepareTurn = Effect.fn("AcpAgentClient.prepareTurn")(function* (
+    this: AcpAgentClient,
+    threadId: string,
+    params: unknown,
+  ): Effect.fn.Return<{ turn: { id: string; status: string }; turnId?: string }, ProviderClientOperationError> {
     yield* this.#threads.wake(threadId).pipe(toProviderClientOperationError);
     let thread = yield* providerSync(() => this.#requireThread(threadId));
     if (thread.needsResume && !thread.activeTurn) {
@@ -1753,22 +1776,6 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       );
       thread = yield* providerSync(() => this.#requireThread(threadId));
     }
-    const opening = thread;
-    opening.turnsOpening += 1;
-    return yield* this.#promptTurn(opening, params).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          opening.turnsOpening -= 1;
-        }),
-      ),
-    );
-  });
-
-  readonly #promptTurn = Effect.fn("AcpAgentClient.promptTurn")(function* (
-    this: AcpAgentClient,
-    thread: AcpThread,
-    params: unknown,
-  ): Effect.fn.Return<{ turn: { id: string; status: string }; turnId?: string }, ProviderClientOperationError> {
     // A background replay that runs can start a turn of the agent. The prompt then waits for it.
     if (thread.backgroundReplay) yield* Deferred.await(thread.backgroundReplay);
     if (thread.activeTurn) return yield* providerFailure(this.#turnActiveError(thread.activeTurn));
@@ -2040,7 +2047,7 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
       // Each ACP message is a message of its own. Text that an agent writes in one step and then in
       // the next one with no tool call between was joined into one line.
       const messageId = contentMessageId(update);
-      if (messageId && turn.textMessageId && messageId !== turn.textMessageId)
+      if (this.#flavor.messagePerId && messageId && turn.textMessageId && messageId !== turn.textMessageId)
         this.#completeMessage(thread, turn, "narration");
       if (messageId) turn.textMessageId = messageId;
       if (update.content.text.trim()) {
@@ -2243,11 +2250,15 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     thread: AcpThread,
   ) {
     const stallLimit = this.options.turnStallMs ?? ACP_TURN_STALL_MS;
-    while (this.#threads.get(thread.id) === thread && Date.now() < thread.backgroundUntil) {
+    // A turn of the agent's own ends only here, so the watch goes on while one is open.
+    while (
+      this.#threads.get(thread.id) === thread &&
+      (Date.now() < thread.backgroundUntil || thread.activeTurn?.unprompted === true)
+    ) {
       yield* Effect.sleep(ACP_BACKGROUND_POLL_MS);
       const active = thread.activeTurn;
       // A prompt's own updates show its turn. The replay after it finds nothing new.
-      if ((active && !active.unprompted) || thread.turnsOpening > 0) continue;
+      if ((active && !active.unprompted) || this.#openingTurns.has(thread.id)) continue;
       const updatedAt = yield* this.#sessionUpdatedAt(thread).pipe(Effect.orElseSucceed(() => null));
       if (updatedAt !== null && updatedAt !== thread.backgroundUpdatedAt) {
         const replayed = yield* this.#replayBackground(thread).pipe(
@@ -2280,7 +2291,9 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     thread: AcpThread,
   ) {
     const connection = yield* providerSync(() => this.#requireConnection());
-    const response = yield* providerCall(() => connection.listSessions({ cwd: thread.cwd }));
+    const response = yield* providerCall(() => connection.listSessions({ cwd: thread.cwd })).pipe(
+      this.#backgroundTimeout("session/list"),
+    );
     return response.sessions.find((session) => session.sessionId === thread.id)?.updatedAt ?? null;
   });
 
@@ -2292,14 +2305,17 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     this: AcpAgentClient,
     thread: AcpThread,
   ) {
-    if (thread.turnsOpening > 0 || (thread.activeTurn && !thread.activeTurn.unprompted)) return false;
+    if (this.#openingTurns.has(thread.id) || (thread.activeTurn && !thread.activeTurn.unprompted)) return false;
     const done = Deferred.makeUnsafe<void>();
     const updates: SessionUpdate[] = [];
     thread.backgroundReplay = done;
     this.#backgroundReplays.set(thread.id, updates);
     yield* Effect.gen({ self: this }, function* () {
       const connection = yield* providerSync(() => this.#requireConnection());
-      yield* providerCall(() => connection.loadSession({ sessionId: thread.id, ...thread.restore }));
+      // A prompt waits for this load, so it has the same time limit as a request.
+      yield* providerCall(() => connection.loadSession({ sessionId: thread.id, ...thread.restore })).pipe(
+        this.#backgroundTimeout("session/load"),
+      );
       this.#backgroundReplays.delete(thread.id);
       this.#applyBackgroundEntries(thread, updates);
     }).pipe(
@@ -2314,6 +2330,16 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     return true;
   });
 
+  #backgroundTimeout(method: string) {
+    return <A>(request: Effect.Effect<A, ProviderClientOperationError>) =>
+      request.pipe(
+        Effect.timeoutOrElse({
+          duration: this.#requestTimeoutMs,
+          orElse: () => Effect.fail(providerFailure(new TimeoutError(`${this.#label} request timed out: ${method}`))),
+        }),
+      );
+  }
+
   /**
    * Applies the replayed entries after the last one that the chat showed, and the updates of the
    * tool calls that are still open. The replay lists each message and tool call by its ID.
@@ -2324,10 +2350,7 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     // Without a shown entry, OpenBot cannot tell which part of the session is new.
     if (lastShown < 0) return;
     const fresh = new Set(ids.slice(lastShown + 1).filter((id) => id !== null && !thread.shownIds.has(id)));
-    if (thread.backgroundSkip) {
-      // The rest of a stopped turn can reach the store a little later, so the skip waits for it.
-      if (fresh.size === 0) return;
-      thread.backgroundSkip = false;
+    if (Date.now() < thread.backgroundSkipUntil) {
       for (const id of fresh) if (id) thread.shownIds.add(id);
       return;
     }
@@ -2378,6 +2401,8 @@ export class AcpAgentClient extends EventEmitter<ClientEvents> {
     turn.completing = true;
     // The agent may not have kept a prompt that failed.
     if (status === "failed") thread.instructionsSent = null;
+    // The agent can still store the rest of a turn that did not complete. A replay does not show it.
+    if (status !== "completed") thread.backgroundSkipUntil = Date.now() + ACP_STOPPED_OUTPUT_MS;
     // A prompt can have run tools. Never replay it. Drop the handle before publishing completion
     // so only new input can reload the session, including input already waiting in the queue.
     if (status === "failed" && isSessionNotFound(error, thread.id, this.#flavor)) {

@@ -158,6 +158,8 @@ export const OPENCODE_ACP_FLAVOR: AcpFlavor = {
   // OpenCode 2.2.0 sends updates only for the execution that a prompt starts. The turn that a
   // finished background subagent starts reaches only its store, so the chat never showed it (#3406).
   unsentBackgroundTurns: true,
+  // OpenCode 2.2.0 gives each step's message its own ID. Text of two steps was joined into one line.
+  messagePerId: true,
   // OpenCode 2.1.4 adds each session's MCP servers to the session's directory under their names. A
   // second chat of the agent replaced the `openbot` token, and closing it left the first refused.
   mcpServersPerDirectory: true,

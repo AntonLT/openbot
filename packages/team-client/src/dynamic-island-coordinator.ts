@@ -1,11 +1,12 @@
 import { CHAT_VISUAL_ITEM_TYPE_PREFIX } from "@openbot/contracts/chat-visual";
-import type {
-  AgentEvent,
-  AgentRuntimeWorkItem,
-  DynamicIslandAction,
-  DynamicIslandPresentation,
-  QueueSnapshot,
-  ScopedAgentEvent,
+import {
+  type AgentEvent,
+  type AgentRuntimeWorkItem,
+  CONVERSATION_NARRATION_ITEM_TYPE,
+  type DynamicIslandAction,
+  type DynamicIslandPresentation,
+  type QueueSnapshot,
+  type ScopedAgentEvent,
 } from "@openbot/contracts/ipc";
 import { cleanAgentMessageText } from "./agent-message-text";
 import {
@@ -586,6 +587,7 @@ function toDynamicIslandMessage(
     // A message that another agent sent to this one is not a reply to the user.
     message.senderAgentId ||
     message.itemType === "commentary" ||
+    message.itemType === CONVERSATION_NARRATION_ITEM_TYPE ||
     message.itemType === "question_prompt" ||
     message.itemType === "agent_attachment" ||
     message.itemType?.startsWith(CHAT_VISUAL_ITEM_TYPE_PREFIX) ||
