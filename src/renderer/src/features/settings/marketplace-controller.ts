@@ -722,7 +722,7 @@ export function createMarketplaceController(props: MarketplaceControllerProps) {
     const request = requestMacAutomation();
     const targets = [...new Set(plugin.apps.flatMap((app) => app.macAutomation ?? []))];
     const key = `app:${plugin.slug}`;
-    if (!request || targets.length === 0 || busy[key]) return;
+    if (!request || targets.length === 0) return;
     mark(key, true);
     const results = await run(() => request(targets));
     mark(key, false);
@@ -739,7 +739,11 @@ export function createMarketplaceController(props: MarketplaceControllerProps) {
   const macAutomation: MarketplaceMacAutomation = {
     askOnInstall: askAccessOnInstall,
     setAskOnInstall: setAskAccessOnInstall,
-    request: (app) => requestPluginAccess(app.plugin),
+    /* The busy check is here and not in `requestPluginAccess`: the install calls that right after it
+       marks the app free, before the store write is flushed, and would read the app as still busy. */
+    request: async (app) => {
+      if (!busy[`app:${app.plugin.slug}`]) await requestPluginAccess(app.plugin);
+    },
   };
 
   /**

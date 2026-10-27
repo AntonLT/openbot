@@ -27,13 +27,19 @@ const NOT_AUTHORIZED = "-1743";
 /**
  * One harmless event, which is what makes macOS ask. Asking whether an app runs sends no event and
  * so opens nothing; the app that the event opened is quit again, and one the user had open stays.
+ * The access is already given when the quit runs, so an app that refuses to quit (Messages can
+ * answer -128 while it starts) does not change the answer.
  */
 function automationScript(bundleId: string): string {
   const app = `application id "${bundleId}"`;
   return [
     `set wasRunning to ${app} is running`,
     `tell ${app} to count windows`,
-    `if not wasRunning then tell ${app} to quit`,
+    "if not wasRunning then",
+    "try",
+    `tell ${app} to quit`,
+    "end try",
+    "end if",
   ].join("\n");
 }
 
