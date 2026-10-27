@@ -303,6 +303,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Oturum açma uygulamasının istemci kimliğini girin.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Bu MCP sunucusunun oturum açma sunucusu değişti, bu yüzden OpenBot oturum açma uygulamasını ona göndermedi. Değişiklik doğruysa oturum açma uygulamasını kaldırıp yeniden ekleyin.",
+  "error.backend.mcpSignInClientRefused":
+    "Oturum açma sunucusu, oturum açma tamamlanırken OpenBot'u kabul etmedi. Yeniden oturum açın: OpenBot sunucuya yeniden kaydolur.",
   "error.backend.mcpSignInAppNoServer":
     "Oturum açma uygulaması eklemeden önce bu MCP sunucusunu URL sunucusu olarak kaydedin.",
   "error.backend.mcpSignInAppUnavailable": "Bu bilgisayar oturum açma uygulaması saklayamaz.",

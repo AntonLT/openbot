@@ -319,6 +319,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Inserisci l'ID client dell'app di accesso.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Il server di accesso di questo server MCP è cambiato, quindi OpenBot non gli ha inviato l'app di accesso. Se la modifica è corretta, rimuovi l'app di accesso e aggiungila di nuovo.",
+  "error.backend.mcpSignInClientRefused":
+    "Il server di accesso non ha accettato OpenBot al completamento dell'accesso. Accedi di nuovo: OpenBot si registra di nuovo sul server.",
   "error.backend.mcpSignInAppNoServer":
     "Salva questo server MCP come server con URL prima di aggiungere un'app di accesso.",
   "error.backend.mcpSignInAppUnavailable": "Questo computer non può conservare un'app di accesso.",

@@ -334,6 +334,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Gib die Client-ID der Anmelde-App ein.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Der Anmeldeserver dieses MCP-Servers hat sich geändert, daher hat OpenBot ihm die Anmelde-App nicht gesendet. Wenn die Änderung korrekt ist, entferne die Anmelde-App und füge sie erneut hinzu.",
+  "error.backend.mcpSignInClientRefused":
+    "Der Anmeldeserver hat OpenBot beim Abschluss der Anmeldung nicht akzeptiert. Melde dich erneut an: OpenBot registriert sich erneut beim Server.",
   "error.backend.mcpSignInAppNoServer":
     "Speichere diesen MCP-Server als URL-Server, bevor du eine Anmelde-App hinzufügst.",
   "error.backend.mcpSignInAppUnavailable": "Dieser Computer kann keine Anmelde-App speichern.",

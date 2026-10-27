@@ -321,6 +321,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Introduce el ID de cliente de la app de inicio de sesión.",
   "error.backend.mcpSignInAppIssuerChanged":
     "El servidor de inicio de sesión de este servidor MCP cambió, así que OpenBot no le envió la app de inicio de sesión. Si el cambio es correcto, quita la app de inicio de sesión y añádela de nuevo.",
+  "error.backend.mcpSignInClientRefused":
+    "El servidor de inicio de sesión no aceptó a OpenBot al completar el inicio de sesión. Inicia sesión de nuevo: OpenBot se registra otra vez en el servidor.",
   "error.backend.mcpSignInAppNoServer":
     "Guarda este servidor MCP como servidor de URL antes de añadir una app de inicio de sesión.",
   "error.backend.mcpSignInAppUnavailable": "Este equipo no puede guardar una app de inicio de sesión.",

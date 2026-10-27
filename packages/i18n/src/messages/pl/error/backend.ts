@@ -311,6 +311,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Wpisz identyfikator klienta aplikacji logowania.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Serwer logowania tego serwera MCP zmienił się, więc OpenBot nie wysłał mu aplikacji logowania. Jeśli ta zmiana jest poprawna, usuń aplikację logowania i dodaj ją ponownie.",
+  "error.backend.mcpSignInClientRefused":
+    "Serwer logowania nie zaakceptował OpenBot przy kończeniu logowania. Zaloguj się ponownie: OpenBot zarejestruje się ponownie na serwerze.",
   "error.backend.mcpSignInAppNoServer": "Zapisz ten serwer MCP jako serwer URL, zanim dodasz aplikację logowania.",
   "error.backend.mcpSignInAppUnavailable": "Ten komputer nie może przechować aplikacji logowania.",
   "error.backend.taskMoveRefused": "Jako zadanie można uruchomić tylko wiadomość wysłaną wyłącznie do tego agenta.",

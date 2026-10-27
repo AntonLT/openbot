@@ -309,6 +309,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Введите ID клиента приложения входа.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Сервер входа этого MCP-сервера изменился, поэтому OpenBot не отправил ему приложение входа. Если это изменение верно, удалите приложение входа и добавьте его снова.",
+  "error.backend.mcpSignInClientRefused":
+    "Сервер входа не принял OpenBot при завершении входа. Войдите снова: OpenBot заново зарегистрируется на сервере.",
   "error.backend.mcpSignInAppNoServer":
     "Сохраните этот MCP-сервер как URL-сервер, прежде чем добавлять приложение входа.",
   "error.backend.mcpSignInAppUnavailable": "Этот компьютер не может хранить приложение входа.",

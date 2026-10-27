@@ -324,6 +324,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Voer de client-ID van de inlogapp in.",
   "error.backend.mcpSignInAppIssuerChanged":
     "De inlogserver van deze MCP-server is gewijzigd, dus OpenBot heeft de inlogapp niet verstuurd. Als de wijziging klopt, verwijder je de inlogapp en voeg je deze opnieuw toe.",
+  "error.backend.mcpSignInClientRefused":
+    "De inlogserver heeft OpenBot niet geaccepteerd bij het voltooien van de aanmelding. Meld je opnieuw aan: OpenBot registreert zich dan opnieuw bij de server.",
   "error.backend.mcpSignInAppNoServer": "Sla deze MCP-server op als URL-server voordat je een inlogapp toevoegt.",
   "error.backend.mcpSignInAppUnavailable": "Deze computer kan geen inlogapp bewaren.",
   "error.backend.taskMoveRefused":

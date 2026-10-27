@@ -834,13 +834,18 @@ class McpOAuthClientProvider implements OAuthClientProvider {
    * What OpenBot registers itself as. `redirect_uris` holds the one address this run receives on,
    * so an authorization server will not send a grant anywhere else.
    *
-   * No `token_endpoint_auth_method`, and no `scope` unless a sign-in app names one: the SDK takes
-   * the scope the server's own protected-resource metadata asks for, and picks an authentication
-   * method the server said it supports. Naming either here would be OpenBot guessing in front of
-   * an answer it already has.
+   * No `scope` unless a sign-in app names one: the SDK takes the scope the server's own
+   * protected-resource metadata asks for.
+   *
+   * A public client (`none`) when the server lists that method. RFC 8252 makes a native app a public
+   * client, because a secret on the user's computer is not secret, and PKCE protects the grant.
+   * Some servers also issue a secret they never accept: Railway registers `client_secret_basic` and
+   * then refuses that secret at the token endpoint (#3429). A server that does not list `none` still
+   * picks its own method, and the SDK uses the one it registered.
    */
   get clientMetadata(): OAuthClientMetadata {
     const scope = this.#record().app?.scope;
+    const methods = this.#discoveryState?.authorizationServerMetadata?.token_endpoint_auth_methods_supported;
     return {
       client_name: "OpenBot",
       client_uri: "https://openbot.run",
@@ -848,6 +853,7 @@ class McpOAuthClientProvider implements OAuthClientProvider {
       redirect_uris: [this.#options.redirectUrl],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
+      ...(methods?.includes("none") ? { token_endpoint_auth_method: "none" } : {}),
       ...(scope ? { scope } : {}),
     };
   }
@@ -900,7 +906,13 @@ class McpOAuthClientProvider implements OAuthClientProvider {
     }
     const client = this.#credential(record.client);
     this.recordSecret(record.client?.client_secret);
-    if (!client) return this.#register();
+    if (!client) {
+      // The token endpoint refused the client, and the SDK dropped it before it tried again. The
+      // grant belongs to that client, so a new registration cannot spend it. Without this the SDK
+      // says only that it has no client, and the server's refusal is lost.
+      if (this.#exchangingCode) throw new Error(sourceText("error.backend.mcpSignInClientRefused"));
+      return this.#register();
+    }
     if (!this.#options.state || this.#exchangingCode) return client;
     if (client.redirect_uris.includes(this.#options.redirectUrl)) return client;
     const refreshWorthTrying = !this.#redirectAddressChecked && Boolean(record.tokens?.refresh_token);

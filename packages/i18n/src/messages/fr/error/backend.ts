@@ -329,6 +329,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Saisissez l’ID client de l’app de connexion.",
   "error.backend.mcpSignInAppIssuerChanged":
     "Le serveur de connexion de ce serveur MCP a changé : OpenBot ne lui a pas envoyé l’app de connexion. Si ce changement est correct, supprimez l’app de connexion et ajoutez-la à nouveau.",
+  "error.backend.mcpSignInClientRefused":
+    "Le serveur de connexion n’a pas accepté OpenBot à la fin de la connexion. Connectez-vous à nouveau : OpenBot s’enregistre de nouveau auprès du serveur.",
   "error.backend.mcpSignInAppNoServer":
     "Enregistrez ce serveur MCP comme serveur URL avant d’ajouter une app de connexion.",
   "error.backend.mcpSignInAppUnavailable": "Cet ordinateur ne peut pas conserver d’app de connexion.",

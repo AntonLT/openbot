@@ -299,6 +299,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "로그인 앱의 클라이언트 ID를 입력하세요.",
   "error.backend.mcpSignInAppIssuerChanged":
     "이 MCP 서버의 로그인 서버가 바뀌어서 OpenBot이 로그인 앱을 보내지 않았어요. 변경이 맞다면 로그인 앱을 제거한 후 다시 추가하세요.",
+  "error.backend.mcpSignInClientRefused":
+    "로그인을 완료할 때 로그인 서버가 OpenBot을 받아들이지 않았어요. 다시 로그인하세요. OpenBot이 서버에 다시 등록해요.",
   "error.backend.mcpSignInAppNoServer": "로그인 앱을 추가하기 전에 이 MCP 서버를 URL 서버로 저장하세요.",
   "error.backend.mcpSignInAppUnavailable": "이 컴퓨터에서는 로그인 앱을 보관할 수 없어요.",
   "error.backend.taskMoveRefused": "이 에이전트에게만 보낸 메시지만 작업으로 실행할 수 있어요.",

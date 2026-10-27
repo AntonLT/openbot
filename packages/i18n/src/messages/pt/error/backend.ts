@@ -318,6 +318,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "Digite o ID do cliente do app de login.",
   "error.backend.mcpSignInAppIssuerChanged":
     "O servidor de login deste servidor MCP mudou, então o OpenBot não enviou o app de login a ele. Se a mudança estiver correta, remova o app de login e adicione-o de novo.",
+  "error.backend.mcpSignInClientRefused":
+    "O servidor de login não aceitou o OpenBot ao concluir o login. Entre de novo: o OpenBot se registra outra vez no servidor.",
   "error.backend.mcpSignInAppNoServer":
     "Salve este servidor MCP como servidor de URL antes de adicionar um app de login.",
   "error.backend.mcpSignInAppUnavailable": "Este computador não consegue guardar um app de login.",

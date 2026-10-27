@@ -319,6 +319,8 @@ export const messages = {
   "error.backend.mcpSignInAppClientId": "サインインアプリのクライアント ID を入力してください。",
   "error.backend.mcpSignInAppIssuerChanged":
     "この MCP サーバーのサインインサーバーが変わったため、OpenBot はサインインアプリを送信しませんでした。この変更が正しい場合は、サインインアプリを削除してからもう一度追加してください。",
+  "error.backend.mcpSignInClientRefused":
+    "サインインの完了時に、サインインサーバーが OpenBot を受け付けませんでした。もう一度サインインしてください。OpenBot はサーバーに再登録します。",
   "error.backend.mcpSignInAppNoServer":
     "サインインアプリを追加する前に、この MCP サーバーを URL サーバーとして保存してください。",
   "error.backend.mcpSignInAppUnavailable": "このコンピューターではサインインアプリを保存できません。",
